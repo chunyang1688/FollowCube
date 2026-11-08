@@ -1,0 +1,16 @@
+{
+  "name": "phase0",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node check.mjs",
+    "check:vision": "node check-vision.mjs"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "rubik-solver": "^0.1.2",
+    "three": "^0.187.0"
+  }
+}
