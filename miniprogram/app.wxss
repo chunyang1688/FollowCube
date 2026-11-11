@@ -1,0 +1,72 @@
+/* 全局样式：rpx + Flex，暗色魔方配色 */
+page {
+  --fc-bg: #f2f3f5;
+  --fc-card: #ffffff;
+  --fc-text: #1f2329;
+  --fc-muted: #8a9099;
+  --fc-primary: #07c160;
+  --fc-danger: #ee0a24;
+  --fc-border: #e5e6eb;
+  --fc-slot: #3a3a3a;
+
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', sans-serif;
+  font-size: 28rpx;
+  color: var(--fc-text);
+  background-color: var(--fc-bg);
+  box-sizing: border-box;
+}
+
+view,
+text,
+button {
+  box-sizing: border-box;
+}
+
+.card {
+  margin: 20rpx 24rpx;
+  padding: 24rpx;
+  background: var(--fc-card);
+  border-radius: 16rpx;
+}
+
+.muted {
+  color: var(--fc-muted);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.btn {
+  margin: 0;
+  padding: 0 24rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  font-size: 26rpx;
+  border-radius: 10rpx;
+  background: #f4f5f7;
+  color: var(--fc-text);
+}
+
+.btn::after {
+  border: none;
+}
+
+.btn-primary {
+  background: var(--fc-primary);
+  color: #ffffff;
+}
+
+.btn[disabled] {
+  opacity: 0.45;
+}
+
+.safe-area-bottom {
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+}

@@ -2,7 +2,21 @@
 
 跟着还原魔方：把当前魔方颜色填进网页 → 求解 → 在 3D 动画里一步步跟着转，对照实体魔方还原。
 
-当前可运行演示在 `spike/phase0/`（浏览器 H5 原型，尚未接入微信小程序）。
+当前可运行演示在 `spike/phase0/`（浏览器 H5 原型）。
+
+微信小程序版在 `miniprogram/`（微信原生，功能已补齐：手工填色 / 拍照识别六面 → Kociemba 求解 → 3D 模型 + 中文步骤跟做）。用微信开发者工具导入 `miniprogram/` 目录即可预览；导入前把 `project.config.json` 里的 `appid` 占位值换成自己的 AppID（或用游客模式）。3D 引擎已随分包附带，**无需在开发者工具里「构建 npm」**。
+
+构建与自检（Node 18+）：
+
+```bash
+cd tools
+npm install
+npm run build:solver     # 重建求解 Worker（可选，产物已随仓库提供）
+npm run build:threejs    # 重新 vendor threejs-miniprogram（可选）
+npm run verify:all       # 求解器 / 3D 状态机 / 视觉识别 / 项目静态检查
+```
+
+开发进度、接口清单、隐私合规前置与提审待办见《小程序项目档案.md》。
 
 ## 功能
 
@@ -80,8 +94,16 @@ npm run check:vision   # 颜色识别基础用例
 ```
 FollowCube/
 ├── README.md
+├── 小程序项目档案.md       # 小程序进度、接口清单、待办与提审记录
 ├── .gitignore
-└── spike/phase0/          # 当前可运行原型
+├── miniprogram/           # 微信小程序项目根（开发者工具导入此目录）
+│   ├── pages/index/       # 主包：手工填色 + 求解
+│   ├── packageFollow/     # 分包：3D 跟做（含 vendor/threejs-miniprogram）
+│   ├── packageCamera/     # 分包：拍照识别六面
+│   ├── utils/ services/   # 纯逻辑层 / Worker 适配层
+│   └── workers/solver/    # 求解 Worker 单文件产物
+├── tools/                 # Worker 源码、3D vendor 脚本、四组自检脚本
+└── spike/phase0/          # 浏览器 H5 原型（保留）
     ├── index.html         # 页面与样式
     ├── main.js            # 填色、拍照流程、3D 跟做
     ├── worker.js          # 求解 Worker
@@ -94,18 +116,18 @@ FollowCube/
     └── check*.mjs         # 自检脚本
 ```
 
-## 产品阶段（规划）
+## 产品阶段
 
-| 阶段 | 目标 |
-|------|------|
-| 0 | 技术验证（当前仓库） |
-| 1 | 手工填色 MVP |
-| 2 | 3D 跟着还原 |
-| 3 | 拍照 + 纠错 |
-| 4 | 体验打磨 |
-| 5 | 发布（如小程序） |
+| 阶段 | 目标 | H5 原型 | 小程序 |
+|------|------|---------|--------|
+| 0 | 技术验证 | 已完成 | — |
+| 1 | 手工填色 + 求解 | 已完成 | 已完成 |
+| 2 | 3D 跟着还原 | 已完成 | 已完成 |
+| 3 | 拍照识别 + 纠错 | 已完成 | 已完成 |
+| 4 | 真机双端验收、体验打磨 | — | 待进行 |
+| 5 | 备案 / 提审 / 发布 | — | 待进行 |
 
-当前 `spike/phase0` 已覆盖 0–3 的核心路径原型。
+小程序仍需在微信开发者工具与 iOS / Android 真机走完整流程后再提审，详见《小程序项目档案.md》的提审前差距清单。
 
 ## 技术栈
 

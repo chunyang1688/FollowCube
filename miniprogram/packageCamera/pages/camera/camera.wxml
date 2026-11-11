@@ -1,0 +1,134 @@
+<view class="page">
+  <view class="card">
+    <view class="title">拍照填色 · 第 {{current.step}} / 6 面</view>
+    <text class="muted">按中心色顺序拍摄六个面：白 → 红 → 绿 → 黄 → 橙 → 蓝。点下方圆点可单独重拍某一面。</text>
+    <view class="face-tabs">
+      <view
+        wx:for="{{faceStates}}"
+        wx:for-index="i"
+        wx:key="face"
+        class="face-tab {{item.current ? 'tab-current' : ''}}"
+        data-index="{{item.index}}"
+        bindtap="onSelectFace"
+      >
+        <view class="tab-dot" style="background:{{item.hex}}"></view>
+        <text class="tab-label">{{item.label}}{{item.filled ? ' ✓' : ''}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 待拍摄：说明与入口 -->
+  <view wx:if="{{stage === 'guide'}}" class="card">
+    <view class="target">请把「{{current.title}}」正对自己（{{current.centerColor}}色中心），让整个面占满取景框</view>
+    <view class="advice">· 保持光线均匀，避开强反光与阴影</view>
+    <view class="advice">· 正对拍摄，魔方边线尽量与取景框平行</view>
+    <view class="advice">· 拍照后可拖动九宫格微调，识别结果还能手动改色</view>
+    <button class="btn btn-primary" bindtap="onStartCapture">拍摄这一面</button>
+    <button class="btn" bindtap="onChooseImage">从相册选一张</button>
+    <text class="muted">照片仅在手机本地处理，不上传、不保存；不会获取相册以外的任何信息。</text>
+  </view>
+
+  <!-- 相机取景 -->
+  <view wx:if="{{stage === 'capture'}}" class="card capture-card">
+    <camera
+      class="camera"
+      style="height:{{boxSize}}px"
+      device-position="back"
+      flash="off"
+      frame-size="medium"
+      binderror="onCameraError"
+    >
+      <cover-view class="cap-frame"></cover-view>
+      <cover-view class="cap-hint">让「{{current.title}}」填满方框</cover-view>
+    </camera>
+    <view class="row capture-actions">
+      <button class="btn" bindtap="onCancelCapture">取消</button>
+      <button class="btn btn-primary" bindtap="onTakePhoto">拍照</button>
+    </view>
+  </view>
+
+  <!-- 九宫格对齐 -->
+  <view wx:if="{{stage === 'align'}}" class="card">
+    <view
+      id="photo-box"
+      class="photo-box"
+      style="width:{{boxSize}}px;height:{{boxSize}}px"
+      bindtouchstart="onTouchStart"
+      catchtouchmove="onTouchMove"
+      bindtouchend="onTouchEnd"
+      bindtouchcancel="onTouchEnd"
+    >
+      <image class="photo" src="{{photoPath}}" mode="aspectFit" style="width:{{boxSize}}px;height:{{boxSize}}px"></image>
+      <view class="guide" style="{{guideStyle}}">
+        <view class="g-line g-v" style="left:33.333%"></view>
+        <view class="g-line g-v" style="left:66.666%"></view>
+        <view class="g-line g-h" style="top:33.333%"></view>
+        <view class="g-line g-h" style="top:66.666%"></view>
+        <view class="g-corner c-tl"></view>
+        <view class="g-corner c-tr"></view>
+        <view class="g-corner c-bl"></view>
+        <view class="g-corner c-br"></view>
+      </view>
+    </view>
+    <view class="tool-row">
+      <button class="mini-btn" bindtap="onSizeOut">缩小</button>
+      <button class="mini-btn" bindtap="onSizeIn">放大</button>
+      <button class="mini-btn" bindtap="onRotateLeft">左转</button>
+      <button class="mini-btn" bindtap="onRotateRight">右转</button>
+      <button class="mini-btn" bindtap="onResetGuide">复位</button>
+    </view>
+    <text class="tips">{{tips}}</text>
+    <button class="btn btn-primary" bindtap="onRecognize">识别这一面</button>
+    <button class="btn" bindtap="onRetake">重拍 / 换一张</button>
+  </view>
+
+  <!-- 识别结果校正 -->
+  <view wx:if="{{stage === 'confirm'}}" class="card">
+    <view class="section-title">识别结果（点格子后选颜色可修正）</view>
+    <view class="result-grid">
+      <view
+        wx:for="{{resultCells}}"
+        wx:for-index="i"
+        wx:key="idx"
+        class="result-cell {{item.isCenter ? 'is-center' : ''}} {{item.editing ? 'is-editing' : ''}} {{item.color === '?' ? 'is-unknown' : ''}}"
+        style="background:{{item.hex}}"
+        data-index="{{item.idx}}"
+        bindtap="onCellTap"
+      >
+        <text class="cell-name">{{item.name}}</text>
+      </view>
+    </view>
+    <view class="palette">
+      <view
+        wx:for="{{palette}}"
+        wx:for-index="i"
+        wx:key="key"
+        class="palette-item {{activeColor === item.key ? 'palette-active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="onPaletteTap"
+      >
+        <view class="swatch" style="background:{{item.hex}}"></view>
+        <text class="palette-label">{{item.name}}</text>
+      </view>
+    </view>
+    <text class="tips">{{tips}}</text>
+    <button class="btn btn-primary" bindtap="onConfirmFace">确认这一面</button>
+    <view class="row">
+      <button class="btn" bindtap="onBackToAlign">调整九宫格</button>
+      <button class="btn" bindtap="onRetake">重拍</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <button class="btn" bindtap="onBack">返回手工填色</button>
+  </view>
+
+  <!-- 离屏取像素画布：必须留在页面内，不能 display:none -->
+  <canvas
+    type="2d"
+    id="px-canvas"
+    class="px-canvas"
+    style="width:{{boxSize}}px;height:{{boxSize}}px"
+  ></canvas>
+  <view class="safe-area-bottom"></view>
+</view>

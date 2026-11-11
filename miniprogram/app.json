@@ -1,0 +1,46 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "subpackages": [
+    {
+      "name": "packageFollow",
+      "root": "packageFollow",
+      "pages": [
+        "pages/follow/follow"
+      ]
+    },
+    {
+      "name": "packageCamera",
+      "root": "packageCamera",
+      "pages": [
+        "pages/camera/camera"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/index/index": {
+      "network": "all",
+      "packages": [
+        "packageFollow"
+      ]
+    }
+  },
+  "workers": "workers",
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "跟着还原魔方",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f2f3f5",
+    "backgroundTextStyle": "dark",
+    "enablePullDownRefresh": false
+  },
+  "permission": {
+    "scope.camera": {
+      "desc": "用于拍摄魔方六个面并识别颜色；照片仅在本机处理，不会上传"
+    }
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

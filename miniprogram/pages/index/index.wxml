@@ -1,0 +1,86 @@
+<view class="page">
+  <view class="card">
+    <view class="title">跟着还原魔方</view>
+    <text class="muted">手工填色或用相机拍六个面 → 求解 → 对照 3D 模型与中文步骤一步步转动实体魔方。</text>
+    <view class="solver-line">
+      <view class="dot {{solverReady ? 'dot-ok' : ''}}"></view>
+      <text class="muted">{{solverStatus}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">1. 选颜色，再点展开图上的格子</view>
+    <view class="palette">
+      <view
+        wx:for="{{palette}}"
+        wx:key="key"
+        class="palette-item {{activeColor === item.key ? 'palette-active' : ''}}"
+        bindtap="onPaletteTap"
+        data-key="{{item.key}}"
+      >
+        <view class="swatch" style="background:{{item.hex}}"></view>
+        <text class="palette-label">{{item.name}}</text>
+      </view>
+    </view>
+    <text class="muted">中心格颜色固定，不能修改；每个色应恰好 9 格。</text>
+  </view>
+
+  <view class="card">
+    <view class="section-title">2. 展开图（面序 U R F D L B）</view>
+    <view class="net">
+      <view
+        wx:for="{{faces}}"
+        wx:key="face"
+        class="face"
+        style="grid-row:{{item.row + 1}};grid-column:{{item.col + 1}}"
+      >
+        <text class="face-title">{{item.title}}</text>
+        <view class="face-grid">
+          <view
+            wx:for="{{item.cells}}"
+            wx:for-item="cell"
+            wx:key="gi"
+            class="cell {{cell.isCenter ? 'is-center' : ''}} {{cell.error ? 'is-error' : ''}}"
+            style="background:{{cell.hex}}"
+            bindtap="onCellTap"
+            data-gi="{{cell.gi}}"
+          ></view>
+        </view>
+      </view>
+    </view>
+    <text class="counts">{{countsText}}</text>
+    <text wx:if="{{hint}}" class="hint {{hasError ? 'hint-error' : ''}}">{{hint}}</text>
+  </view>
+
+  <view class="card">
+    <view class="row">
+      <button class="btn btn-primary" bindtap="onSolve" disabled="{{!solverReady || solving}}">
+        {{solving ? '求解中…' : '求解'}}
+      </button>
+      <button class="btn" bindtap="onSample">示例打乱</button>
+      <button class="btn" bindtap="onSolved">已还原</button>
+      <button class="btn" bindtap="onClear">全部清空</button>
+    </view>
+  </view>
+
+  <view wx:if="{{steps.length}}" class="card">
+    <view class="section-title">3. 解法：{{moveCount}} 步（耗时 {{solveMs}}ms）</view>
+    <text class="formula">{{solutionText}}</text>
+    <button class="btn btn-primary go-follow" bindtap="onGoFollow">去跟着还原 →</button>
+    <scroll-view scroll-y class="step-list">
+      <view wx:for="{{steps}}" wx:key="no" class="step-item">
+        <text class="step-no">{{item.no}}</text>
+        <text class="step-token">{{item.token}}</text>
+        <text class="step-desc">{{item.desc}}</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">不想手填？用相机识别</view>
+    <text class="muted">按中心色顺序拍六个面，对齐九宫格后自动识别，结果可逐格修正。照片只在本机处理。</text>
+    <button class="btn go-camera" bindtap="onGoCamera">拍照填色</button>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>

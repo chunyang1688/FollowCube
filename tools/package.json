@@ -1,0 +1,21 @@
+{
+  "name": "followcube-build-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FollowCube 小程序构建与自检：Worker 求解器打包、3D 引擎 vendor、Node 侧验证",
+  "scripts": {
+    "build:solver": "esbuild solver-worker-entry.js --bundle --format=iife --platform=browser --target=es2017 --minify --outfile=../miniprogram/workers/solver/index.js",
+    "build:threejs": "node vendor-threejs.cjs",
+    "verify:solver": "node verify-solver.cjs",
+    "verify:cube3d": "node verify-cube3d.cjs",
+    "verify:vision": "node verify-vision.cjs",
+    "verify:scramble": "node verify-scramble.cjs",
+    "verify:project": "node verify-project.cjs",
+    "verify:all": "npm run verify:solver && npm run verify:cube3d && npm run verify:vision && npm run verify:scramble && npm run verify:project"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "rubik-solver": "0.1.2",
+    "threejs-miniprogram": "0.0.8"
+  }
+}

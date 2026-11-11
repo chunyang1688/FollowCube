@@ -1,0 +1,81 @@
+<view class="page" wx:if="{{!empty}}">
+  <view class="card">
+    <view class="progress">
+      <view class="progress-bar" style="width:{{progress}}%"></view>
+    </view>
+    <text class="muted">进度 {{index}} / {{total}} 步 · 单指转动魔方视角，双指缩放</text>
+  </view>
+
+  <view class="card view-card">
+    <canvas
+      wx:if="{{view3d}}"
+      type="webgl"
+      id="cube-canvas"
+      class="cube-canvas"
+      disable-scroll="{{true}}"
+      bindtouchstart="onTouchStart"
+      bindtouchmove="onTouchMove"
+      bindtouchend="onTouchEnd"
+      bindtouchcancel="onTouchEnd"
+    ></canvas>
+    <view wx:if="{{!view3d}}" class="view-fallback">
+      <text class="fallback-icon">◈</text>
+      <text class="muted">{{view3dTip}}</text>
+    </view>
+    <view class="view-tools">
+      <button class="mini-btn" bindtap="onZoomIn" disabled="{{!view3d}}">放大</button>
+      <button class="mini-btn" bindtap="onZoomOut" disabled="{{!view3d}}">缩小</button>
+      <button class="mini-btn" bindtap="onResetCamera" disabled="{{!view3d}}">复位视角</button>
+    </view>
+  </view>
+
+  <view class="card step-card" wx:if="{{!done}}">
+    <view class="step-label">第 {{index + 1}} 步</view>
+    <view class="big-token">{{current.token}}</view>
+    <view class="big-desc">{{current.desc}}</view>
+    <text class="muted">看着 3D 模型转动，再照着转动实体魔方，然后点「下一步」</text>
+  </view>
+
+  <view class="card step-card" wx:else>
+    <view class="success">还原成功！</view>
+    <text class="muted">对照实体魔方检查六个面。想再来一次可点「从头再跟」。</text>
+  </view>
+
+  <view class="card">
+    <view class="row">
+      <button class="btn" bindtap="onPrev" disabled="{{index === 0 || animating || autoPlay}}">上一步</button>
+      <button class="btn btn-primary" bindtap="onNext" disabled="{{done || animating || autoPlay}}">
+        {{animating ? '转动中…' : '下一步'}}
+      </button>
+      <button class="btn" bindtap="onRestart" disabled="{{animating}}">从头再跟</button>
+    </view>
+    <button class="btn auto-btn" bindtap="onAutoPlay" disabled="{{animating && !autoPlay}}">
+      {{autoPlay ? '暂停自动演示' : '自动演示全部步骤'}}
+    </button>
+  </view>
+
+  <view class="card">
+    <view class="section-title">完整公式</view>
+    <text class="formula">{{solutionText}}</text>
+    <scroll-view scroll-y class="step-list">
+      <view
+        wx:for="{{steps}}"
+        wx:for-index="row"
+        wx:key="no"
+        class="step-item {{index >= item.no ? 'step-done' : ''}} {{index + 1 === item.no ? 'step-current' : ''}}"
+      >
+        <text class="step-no">{{item.no}}</text>
+        <text class="step-token">{{item.token}}</text>
+        <text class="step-desc">{{item.desc}}</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>
+
+<view class="card" wx:else>
+  <view class="section-title">还没有解法</view>
+  <text class="muted">请先回首页填色并求解，解法会自动带到这里。</text>
+  <button class="btn btn-primary back" bindtap="onBack">返回填色</button>
+</view>
