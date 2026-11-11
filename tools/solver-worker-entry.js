@@ -126,8 +126,19 @@ function ensureInit() {
   }
 }
 
+// 主线程回调在不同基础库上有两种形态，这里都认，避免 ping 被当成空消息丢掉。
+function unwrap(res) {
+  if (!res || typeof res !== 'object') return {};
+  const inner = res.message;
+  if (inner && typeof inner === 'object' && (inner.type != null || inner.requestId != null)) {
+    return inner;
+  }
+  if (res.type != null || res.requestId != null) return res;
+  return {};
+}
+
 onMessage(function (res) {
-  const msg = (res && res.message) || {};
+  const msg = unwrap(res);
   if (msg.type === 'ping' || msg.type === 'solve') {
     ensureInit();
   }

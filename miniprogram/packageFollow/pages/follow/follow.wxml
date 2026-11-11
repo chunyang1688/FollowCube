@@ -77,5 +77,5 @@
 <view class="card" wx:else>
   <view class="section-title">还没有解法</view>
   <text class="muted">请先回首页填色并求解，解法会自动带到这里。</text>
-  <button class="btn btn-primary back" bindtap="onBack">返回填色</button>
+  <button class="btn btn-primary back" bindtap="onBack">返回</button>
 </view>

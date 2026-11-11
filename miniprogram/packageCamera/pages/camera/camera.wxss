@@ -33,7 +33,7 @@
 
 .tab-current {
   border-color: var(--fc-primary);
-  background: #f0faf4;
+  background: var(--fc-primary-soft);
 }
 
 .tab-dot {
@@ -165,7 +165,7 @@
   line-height: 62rpx;
   font-size: 23rpx;
   color: #333;
-  background: #f2f3f5;
+  background: var(--fc-primary-soft);
   border-radius: 8rpx;
 }
 

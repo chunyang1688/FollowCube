@@ -23,7 +23,7 @@ export const COLOR_HEX = {
   L: "#ff6b1a",
   F: "#009b48",
   B: "#0046ad",
-  "?": "#3a3a3a",
+  "?": "#e4ddd4",
 };
 
 export const COLOR_NAME = {

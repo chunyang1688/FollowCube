@@ -177,9 +177,62 @@ function createModel() {
   };
 }
 
+function cross(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0]
+  ];
+}
+
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+const FACE_OF_NORMAL = {
+  '1,0,0': 'R',
+  '-1,0,0': 'L',
+  '0,1,0': 'U',
+  '0,-1,0': 'D',
+  '0,0,1': 'F',
+  '0,0,-1': 'B'
+};
+
+/**
+ * 把「绕这一面朝外法向正转或反转」换成 R、R' 这样的记号。
+ * positiveAroundOutward 为 true 时，右手拇指朝外。法向不是坐标轴时返回 null。
+ */
+function faceToken(normal, positiveAroundOutward) {
+  const face = FACE_OF_NORMAL[normal[0] + ',' + normal[1] + ',' + normal[2]];
+  if (!face) return null;
+  const axisSign = normal[0] || normal[1] || normal[2];
+  // 朝外的正转，换算成绕世界正轴的正转还是反转
+  const worldPositive = positiveAroundOutward ? axisSign > 0 : axisSign < 0;
+  const plainIsPositive = tokenToTurn(face).steps > 0;
+  return plainIsPositive === worldPositive ? face : face + "'";
+}
+
+/**
+ * 按手指在世界上的拖动方向，决定被点中的那一面怎么转。
+ * normal、pos、drag 都是世界坐标。拖动没有长度时返回 null。
+ */
+function turnToken(normal, pos, drag) {
+  const dragLen = Math.hypot(drag[0], drag[1], drag[2]);
+  if (dragLen < 1e-6) return null;
+  let tangent = cross(normal, pos);
+  // 点在面心时，色块中心和法向平行，叉积接近 0，改用一条固定切线
+  if (dot(tangent, tangent) < 0.25) {
+    const helper = Math.abs(normal[1]) < 0.5 ? [0, 1, 0] : [1, 0, 0];
+    tangent = cross(normal, helper);
+  }
+  return faceToken(normal, dot(tangent, drag) >= 0);
+}
+
 module.exports = {
   createModel,
   tokenToTurn,
+  faceToken,
+  turnToken,
   FACE_DEFS,
   LOCAL_DIR,
   ROT,

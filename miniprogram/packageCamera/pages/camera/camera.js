@@ -13,6 +13,49 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/** 左右方向的拍摄方向会交换宽高，用来算转正之后的外接尺寸 */
+function uprightSize(width, height, orientation) {
+  if (
+    orientation === 'left' ||
+    orientation === 'right' ||
+    orientation === 'left-mirrored' ||
+    orientation === 'right-mirrored'
+  ) {
+    return { width: height, height: width };
+  }
+  return { width, height };
+}
+
+/**
+ * 把照片画进正方形画布，并按 getImageInfo.orientation 转正。
+ * image 组件会套用 EXIF，Canvas 2D 的 drawImage 不会。转正后再导出这张画布给预览，
+ * 九宫格才能和取样像素对齐。返回内容区矩形，供自动找面。
+ */
+function drawUprightPhoto(ctx, img, orientation, size) {
+  const orient = orientation || 'up';
+  const box = uprightSize(img.width || 1, img.height || 1, orient);
+  const layout = V.fitPhotoLayout(box.width, box.height, size);
+  ctx.save();
+  ctx.translate(layout.dx, layout.dy);
+  if (orient === 'right' || orient === 'right-mirrored') {
+    ctx.translate(layout.dw, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(img, 0, 0, layout.dh, layout.dw);
+  } else if (orient === 'left' || orient === 'left-mirrored') {
+    ctx.translate(0, layout.dh);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(img, 0, 0, layout.dh, layout.dw);
+  } else if (orient === 'down' || orient === 'down-mirrored') {
+    ctx.translate(layout.dw, layout.dh);
+    ctx.rotate(Math.PI);
+    ctx.drawImage(img, 0, 0, layout.dw, layout.dh);
+  } else {
+    ctx.drawImage(img, 0, 0, layout.dw, layout.dh);
+  }
+  ctx.restore();
+  return layout;
+}
+
 Page({
   data: {
     stage: 'guide', // guide | capture | align | confirm
@@ -259,44 +302,81 @@ Page({
 
   // —— 图像 IO：把照片画进离屏 Canvas 2D 并取 RGBA 像素 ——
 
-  loadImageData(path) {
+  /**
+   * 取离屏 Canvas 节点。首屏有时还没挂上，空结果重试几次，避免一拍照就报画布不可用。
+   */
+  queryCanvasNode(left) {
+    const remain = left == null ? 8 : left;
     return new Promise((resolve, reject) => {
-      wx.createSelectorQuery()
+      const query =
+        typeof this.createSelectorQuery === 'function'
+          ? this.createSelectorQuery()
+          : wx.createSelectorQuery();
+      query
         .select('#px-canvas')
         .fields({ node: true, size: true })
         .exec((res) => {
           const item = res && res[0];
-          if (!item || !item.node || typeof item.node.createImage !== 'function') {
+          if (item && item.node && typeof item.node.createImage === 'function') {
+            resolve(item.node);
+            return;
+          }
+          if (remain <= 0) {
             reject(new Error('画布不可用，请升级微信后重试'));
             return;
           }
-          const canvas = item.node;
-          const size = this.size;
-          canvas.width = size;
-          canvas.height = size;
-          const ctx = canvas.getContext('2d');
-          const img = canvas.createImage();
-          img.onload = () => {
-            try {
-              ctx.fillStyle = '#111111';
-              ctx.fillRect(0, 0, size, size);
-              const layout = V.fitPhotoLayout(img.width, img.height, size);
-              ctx.drawImage(img, layout.dx, layout.dy, layout.dw, layout.dh);
-              const image = ctx.getImageData(0, 0, size, size);
-              resolve({ image, layout });
-            } catch (err) {
-              reject(err);
-            }
-          };
-          img.onerror = () => reject(new Error('图片读取失败'));
-          img.src = path;
+          setTimeout(() => {
+            this.queryCanvasNode(remain - 1).then(resolve, reject);
+          }, 80);
         });
+    });
+  },
+
+  /**
+   * 把照片画进离屏画布并取出 RGBA。预览用画布导出的临时图，保证和取样是同一像素。
+   * @returns {Promise<{image:object, layout:object, previewPath:string}>}
+   */
+  loadImageData(path) {
+    const infoPromise = new Promise((resolve) => {
+      wx.getImageInfo({
+        src: path,
+        success: (info) => resolve(info || {}),
+        fail: () => resolve({})
+      });
+    });
+    return Promise.all([this.queryCanvasNode(), infoPromise]).then(([canvas, info]) => {
+      const size = this.size;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const img = canvas.createImage();
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          try {
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(0, 0, size, size);
+            const layout = drawUprightPhoto(ctx, img, info.orientation, size);
+            const image = ctx.getImageData(0, 0, size, size);
+            wx.canvasToTempFilePath({
+              canvas,
+              fileType: 'jpg',
+              quality: 0.92,
+              success: (res) => resolve({ image, layout, previewPath: res.tempFilePath || '' }),
+              fail: () => resolve({ image, layout, previewPath: '' })
+            });
+          } catch (err) {
+            reject(err);
+          }
+        };
+        img.onerror = () => reject(new Error('图片读取失败'));
+        img.src = path;
+      });
     });
   },
 
   async prepareAlign(path) {
     try {
-      const { image, layout } = await this.loadImageData(path);
+      const { image, layout, previewPath } = await this.loadImageData(path);
       this.imageData = image;
       const auto = V.clampGuideRect(V.detectFaceRect(image, layout), this.size);
       // 自动框常偏小，默认放大一点，方便用户微调
@@ -309,7 +389,7 @@ Page({
       );
       this.setData({
         stage: 'align',
-        photoPath: path,
+        photoPath: previewPath || path,
         rect: this.toViewRect(rect),
         guideStyle: this.toGuideStyle(rect),
         tips: '拖动九宫格对齐六个面贴纸；双指缩放，或用下方按钮微调。'
@@ -494,24 +574,27 @@ Page({
     });
   },
 
-  buildResultCells() {
+  /** 九格展示数据。editIndex 要显式传入：setData 的对象在写入 this.data 之前就算好了。 */
+  buildResultCells(editIndex) {
+    const editing = editIndex == null ? this.data.editIndex : editIndex;
     return this.pendingColors.map((color, i) => ({
       idx: i,
       color,
       hex: COLOR_HEX[color] || COLOR_HEX['?'],
       name: COLOR_NAME[color] || '未确定',
       isCenter: i === 4,
-      editing: i === this.data.editIndex
+      editing: i === editing
     }));
   },
 
+  /** 点格子进入手改。高亮用传入的下标，不能等 setData 回写后再读。 */
   onCellTap(e) {
     const idx = Number(e.currentTarget.dataset.index);
     if (idx === 4) {
       wx.showToast({ title: '中心色固定', icon: 'none' });
       return;
     }
-    this.setData({ editIndex: idx, resultCells: this.buildResultCells() });
+    this.setData({ editIndex: idx, resultCells: this.buildResultCells(idx) });
   },
 
   onPaletteTap(e) {
@@ -580,14 +663,34 @@ Page({
     return -1;
   },
 
+  /** 六面都录入后写回全局颜色。若是从填色页进来的，退回原页；否则新开填色页。 */
   finishAll() {
     const app = getApp();
-    if (app && app.globalData) app.globalData.capturedFacelets = this.facelets.slice();
+    if (app && app.globalData) {
+      const text = this.facelets.join('');
+      app.globalData.facelets = text;
+      app.globalData.capturedFacelets = text.split('');
+      app.globalData.solution = null;
+    }
     wx.showModal({
       title: '六面录入完成',
-      content: '已把识别结果带回展开图，请核对颜色与合法性提示后再求解。照片不会上传或保存。',
+      content: '已填进立体魔方。转一转核对颜色，再点「还原」。照片不会上传或保存。',
       showCancel: false,
-      success: () => wx.navigateBack({ fail: () => wx.reLaunch({ url: '/pages/index/index' }) })
+      success: () => {
+        const pages = getCurrentPages();
+        const hasPaint = pages.some((page) => String(page.route || '').indexOf('pages/paint/paint') >= 0);
+        // 栈里已有填色页时只返回，避免叠出两个填色页、旧颜色还留在下面
+        if (hasPaint) {
+          wx.navigateBack({
+            fail: () => wx.redirectTo({ url: '/packageFollow/pages/paint/paint' })
+          });
+          return;
+        }
+        wx.redirectTo({
+          url: '/packageFollow/pages/paint/paint',
+          fail: () => wx.reLaunch({ url: '/pages/index/index' })
+        });
+      }
     });
   },
 

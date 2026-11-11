@@ -1,0 +1,50 @@
+<view class="page">
+  <text class="hint {{hasError ? 'hint-error' : ''}}">{{hint}}</text>
+  <text class="seeing">正在看 {{seeing}}</text>
+
+  <view class="stage">
+    <canvas
+      wx:if="{{view3d}}"
+      type="webgl"
+      id="paint-canvas"
+      class="cube"
+      disable-scroll="{{true}}"
+      bindtouchstart="onTouchStart"
+      catchtouchmove="onTouchMove"
+      bindtouchend="onTouchEnd"
+      bindtouchcancel="onTouchEnd"
+    ></canvas>
+    <view wx:if="{{!view3d}}" class="fallback">
+      <text class="muted">{{view3dTip}}</text>
+    </view>
+  </view>
+
+  <view class="palette">
+    <view class="chip" bindtap="onCamera">
+      <view class="cam">拍</view>
+      <text class="chip-name">拍照</text>
+    </view>
+    <view
+      wx:for="{{palette}}"
+      wx:key="key"
+      class="chip {{activeColor === item.key ? 'on' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="onPalette"
+    >
+      <view class="swatch" style="background:{{item.hex}}"></view>
+      <text class="chip-name">{{item.name}}</text>
+    </view>
+  </view>
+
+  <view class="actions">
+    <button class="btn btn-primary grow" bindtap="onSolve" disabled="{{solving}}">
+      {{solving ? '正在还原…' : '还原'}}
+    </button>
+    <button class="btn" bindtap="onReset">重置</button>
+  </view>
+  <view class="minor">
+    <text bindtap="onSample">示例打乱</text>
+    <text class="sep">·</text>
+    <text bindtap="onSolved">已还原</text>
+  </view>
+</view>

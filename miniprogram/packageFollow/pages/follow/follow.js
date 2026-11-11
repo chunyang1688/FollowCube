@@ -18,6 +18,7 @@ Page({
     autoPlay: false
   },
 
+  /** 读取首页解法。有步骤时等画布真正渲染出来再初始化 3D。 */
   onLoad() {
     const app = getApp();
     const solution = app && app.globalData ? app.globalData.solution : null;
@@ -25,6 +26,7 @@ Page({
     this.cursor = 0;
     this.scene = null;
     this._pageGone = false;
+    this._initing = false;
     this._touch = null;
     this._pinchDist = 0;
 
@@ -33,17 +35,22 @@ Page({
       return;
     }
     this.tokens = solution.tokens || solution.steps.map((s) => s.token);
-    this.setData({
-      empty: false,
-      steps: solution.steps,
-      total: solution.steps.length,
-      solutionText: solution.solution
-    });
+    // 等视图把画布渲染出来再取节点；onReady 里再补一次，避免 setData 与首屏抢跑
+    this.setData(
+      {
+        empty: false,
+        steps: solution.steps,
+        total: solution.steps.length,
+        solutionText: solution.solution
+      },
+      () => this.init3D()
+    );
     this.setCursor(0);
   },
 
+  /** 若 onLoad 的 setData 回调还没开始初始化，这里补一次。 */
   onReady() {
-    if (this.data.empty) return;
+    if (this.data.empty || this.scene || this._initing) return;
     this.init3D();
   },
 
@@ -55,15 +62,41 @@ Page({
     }
   },
 
+  /**
+   * 初始化 WebGL。画布在 wx:if 里，首帧节点经常是空的，失败时先重试，
+   * 不要立刻拆掉 canvas，否则后面再也绑不上。
+   */
   init3D() {
-    const query = wx.createSelectorQuery();
+    if (this._pageGone || this.scene || this._initing) return;
+    this._initing = true;
+    this.queryCanvas(8);
+  },
+
+  /** 取 #cube-canvas 节点。left 为剩余重试次数，间隔 60ms。 */
+  queryCanvas(left) {
+    if (this._pageGone || this.scene) {
+      this._initing = false;
+      return;
+    }
+    const query =
+      typeof this.createSelectorQuery === 'function'
+        ? this.createSelectorQuery()
+        : wx.createSelectorQuery();
     query
       .select('#cube-canvas')
       .fields({ node: true, size: true })
       .exec((res) => {
-        if (this._pageGone) return;
+        if (this._pageGone || this.scene) {
+          this._initing = false;
+          return;
+        }
         const item = res && res[0];
         if (!item || !item.node || !item.width || !item.height) {
+          if (left > 0) {
+            setTimeout(() => this.queryCanvas(left - 1), 60);
+            return;
+          }
+          this._initing = false;
           this.fallback3D('当前环境未取到画布，可继续按文字步骤跟做');
           return;
         }
@@ -87,6 +120,7 @@ Page({
         } catch (err) {
           scene = null;
         }
+        this._initing = false;
         if (!scene) {
           this.fallback3D('当前设备不支持 3D 视图，可继续按文字步骤跟做');
           return;
@@ -115,12 +149,19 @@ Page({
     });
   },
 
+  /** 播放当前步并前进一步。转动被拒绝时不推进，避免步骤和模型错位。 */
   async playNext() {
     if (this._pageGone || this.data.animating || this.cursor >= this.data.total) return false;
     const token = this.tokens[this.cursor];
     this.setData({ animating: true });
     if (this.scene) {
-      await this.scene.playMove(token);
+      try {
+        await this.scene.playMove(token);
+      } catch (err) {
+        // 上一步还在转时拒绝本次，不推进光标，避免模型和步骤错位
+        if (!this._pageGone) this.setData({ animating: false });
+        return false;
+      }
     } else {
       // 降级为文字跟做时也给自动演示留出阅读节奏，避免瞬间跳到最后一步
       await new Promise((resolve) => setTimeout(resolve, 360));

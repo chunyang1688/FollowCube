@@ -1,6 +1,7 @@
 import { Cube, initSolver, solve } from "rubik-solver";
 import { SCRAMBLED } from "./state.js";
 import { animationAngle, parseMove, invertToken } from "./turns.js";
+import { turnToken } from "./gesture.js";
 
 const SOLVED = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
 
@@ -114,5 +115,15 @@ for (const token of [...moves].reverse()) applyToken(picture, invertToken(token)
 if (asString(picture) !== SCRAMBLED) throw new Error("逆解没有摆出打乱状态");
 for (const token of moves) applyToken(picture, token);
 if (asString(picture) !== SOLVED) throw new Error("按解法转完没有还原");
+
+if (turnToken([0, 0, 1], [1, 0, 1], [0, 1, 0]) !== "F'") {
+  throw new Error("前面右侧向上拖应是 F'");
+}
+if (turnToken([0, 0, 1], [1, 0, 1], [0, -1, 0]) !== "F") {
+  throw new Error("前面右侧向下拖应是 F");
+}
+if (turnToken([0, 0, 1], [0, 1, 1], [1, 0, 0]) !== "F") {
+  throw new Error("前面上沿向右拖应是 F");
+}
 
 console.log(`ok  init ${initMs.toFixed(0)}ms  ${moves.length} moves  ${solution}`);

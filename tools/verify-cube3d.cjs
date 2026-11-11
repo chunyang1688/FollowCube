@@ -6,7 +6,7 @@
  * 这是 3D 跟做正确性的核心防线：若方向与求解器约定不符，3D 动画会把用户带偏。
  */
 const path = require('path');
-const { createModel, tokenToTurn } = require('../miniprogram/packageFollow/utils/cube3d-core.js');
+const { createModel, tokenToTurn, turnToken } = require('../miniprogram/packageFollow/utils/cube3d-core.js');
 const { SCRAMBLED } = require('../miniprogram/utils/state.js');
 const { SOLVED, COLOR_ORDER } = require('../miniprogram/utils/colors.js');
 const { invertToken } = require('../miniprogram/utils/turns.js');
@@ -88,6 +88,24 @@ async function main() {
     return ![-2, -1, 1, 2].includes(s);
   });
   check('所有 token 均为 90°/180° 转动', weird.length === 0, '异常 token: ' + weird.join(','));
+
+  // 6. 手动转面：手指往哪边拖，被点中的那一面就往哪边转
+  check(
+    '前面右侧向上拖是 F\'',
+    turnToken([0, 0, 1], [1, 0, 1], [0, 1, 0]) === "F'"
+  );
+  check(
+    '前面右侧向下拖是 F',
+    turnToken([0, 0, 1], [1, 0, 1], [0, -1, 0]) === 'F'
+  );
+  check(
+    '前面上沿向右拖是 F',
+    turnToken([0, 0, 1], [0, 1, 1], [1, 0, 0]) === 'F'
+  );
+  check(
+    '上面靠右、向后拖是 U\'',
+    turnToken([0, 1, 0], [1, 1, 0], [0, 0, -1]) === "U'"
+  );
 
   console.log('\n' + (failed ? '✗ ' + failed + ' 项失败' : '✓ 全部通过') + '（解法 ' + tokens.length + ' 步：' + solution + '）');
   process.exit(failed ? 1 : 0);

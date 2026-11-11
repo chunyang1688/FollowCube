@@ -1,0 +1,49 @@
+<view class="page">
+  <text class="hint">{{hint}}</text>
+
+  <view class="stage">
+    <canvas
+      wx:if="{{view3d}}"
+      type="webgl"
+      id="practice-canvas"
+      class="cube"
+      disable-scroll="{{true}}"
+      bindtouchstart="onTouchStart"
+      catchtouchmove="onTouchMove"
+      bindtouchend="onTouchEnd"
+      bindtouchcancel="onTouchEnd"
+    ></canvas>
+    <view wx:if="{{!view3d}}" class="fallback">
+      <text class="muted">{{view3dTip}}</text>
+    </view>
+  </view>
+
+  <block wx:if="{{mode === 'free'}}">
+    <view class="actions">
+      <button class="btn grow" bindtap="onScramble" disabled="{{busy}}">随机打乱</button>
+      <button class="btn btn-primary grow" bindtap="onRestore" disabled="{{busy}}">还原</button>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="speed-row">
+      <text class="speed-label">播放速度</text>
+      <view
+        wx:for="{{speeds}}"
+        wx:key="key"
+        class="speed {{speed === item.key ? 'on' : ''}}"
+        data-speed="{{item.key}}"
+        bindtap="onSpeed"
+      >{{item.name}}</view>
+    </view>
+    <text class="step-line">{{stepLine}}</text>
+    <view class="actions">
+      <button class="btn grow" bindtap="onPrev" disabled="{{busy || atStart}}">上一步</button>
+      <button class="btn grow" bindtap="onNext" disabled="{{busy || atEnd}}">下一步</button>
+    </view>
+    <view class="actions second">
+      <button class="btn grow" bindtap="onLeaveGuide">返回</button>
+      <button class="btn btn-primary grow" bindtap="onAuto">{{autoPlay ? '停止' : '自动'}}</button>
+    </view>
+  </block>
+</view>

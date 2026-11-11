@@ -3,418 +3,342 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FollowCube · 跟着还原</title>
+    <title>跟着还原魔方</title>
     <style>
       :root {
-        --bg: #141414;
-        --panel: #1e1e1e;
-        --line: #333;
-        --text: #f2f2f2;
-        --muted: #9a9a9a;
-        --ok: #1f8a4c;
-        --warn: #c9871a;
+        --bg: #fff6ea;
+        --card: #ffffff;
+        --text: #2f343a;
+        --muted: #7b8494;
+        --primary: #ff8a5b;
+        --primary-soft: #fff1e6;
+        --danger: #e85d4c;
+        --ok: #3cb371;
+        --line: #f0e4d4;
       }
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
         background: var(--bg);
         color: var(--text);
       }
-      main {
-        display: grid;
-        gap: 20px;
-        padding: 16px;
-        max-width: 1100px;
+      .app {
+        max-width: 480px;
         margin: 0 auto;
+        min-height: 100vh;
+        padding: 16px 16px 32px;
       }
-      @media (min-width: 900px) {
-        main {
-          grid-template-columns: 1fr 1fr;
-          align-items: start;
-        }
-        .span {
-          grid-column: 1 / -1;
-        }
-      }
-      h1 {
-        margin: 0;
-        font-size: 22px;
-      }
-      .muted {
+      .screen { display: none; }
+      .screen.active { display: block; }
+      h1 { margin: 12px 0 8px; font-size: 28px; }
+      h2 { margin: 0; font-size: 16px; }
+      .muted { color: var(--muted); font-size: 14px; line-height: 1.6; }
+      .back {
+        border: 0;
+        background: transparent;
         color: var(--muted);
+        padding: 0;
+        height: auto;
         font-size: 14px;
       }
-      .panel {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        padding: 14px;
-      }
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        margin: 10px 0;
-      }
-      button,
-      .swatch {
+      button, .swatch, .chip {
         font: inherit;
-        border: 0;
         cursor: pointer;
       }
       button {
-        color: #111;
-        background: #ececec;
-        padding: 8px 12px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--text);
+        height: 44px;
+        padding: 0 16px;
       }
-      button.primary {
-        background: #f0c24b;
+      button.primary { background: var(--primary); color: #fff; }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+      .row .grow { flex: 1; }
+      .menu {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 12px 0;
+        padding: 16px;
+        background: var(--card);
+        border-radius: 18px;
+        border: 0;
+        width: 100%;
+        height: auto;
+        text-align: left;
       }
-      button:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
+      .menu b { display: block; font-size: 18px; margin-bottom: 4px; }
+      .mark {
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        flex: 0 0 auto;
       }
-      .swatch {
-        width: 34px;
-        height: 34px;
+      .mark.fill { background: #ff8a5b; }
+      .mark.cam { background: #6aa6ff; }
+      .mark.practice { background: #f0a202; }
+      .mark.go { background: #3cb389; }
+      .stage {
+        margin: 8px 0 12px;
+        background: var(--bg);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      #paint-view, #view, #photo-canvas {
+        width: 100%;
+        aspect-ratio: 1;
+        display: block;
+        background: var(--bg);
+        touch-action: none;
+      }
+      #view { cursor: grab; }
+      #view.orbiting, #photo-canvas.dragging { cursor: grabbing; }
+      .palette { display: flex; justify-content: space-between; gap: 4px; margin: 8px 0 16px; }
+      .chip, .swatch {
         border: 2px solid transparent;
-      }
-      .swatch.active {
-        border-color: #fff;
-        outline: 2px solid #fff;
-      }
-      #counts {
-        font-size: 13px;
-        color: var(--muted);
-      }
-      #net {
-        display: grid;
-        grid-template-columns: repeat(4, max-content);
-        gap: 10px;
-        justify-content: start;
-        overflow-x: auto;
-      }
-      .face {
-        display: grid;
+        background: transparent;
+        border-radius: 12px;
+        padding: 6px 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         gap: 4px;
-        padding: 4px;
-        border: 1px solid transparent;
-        cursor: pointer;
+        color: var(--text);
+        min-width: 44px;
       }
-      .face.active {
-        border-color: #f0c24b;
-        background: rgba(240, 194, 75, 0.08);
-      }
-      .face h2 {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--muted);
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(3, 28px);
-        gap: 3px;
-      }
-      .cell {
+      .chip.on, .swatch.active { border-color: var(--primary); background: var(--primary-soft); }
+      .dot, .swatch i {
         width: 28px;
         height: 28px;
-        border: 1px solid #111;
-        padding: 0;
-      }
-      .cell.center {
-        cursor: default;
-        box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
-      }
-      .cell.target {
-        outline: 2px solid #f0c24b;
-        outline-offset: 1px;
-      }
-      .cell.bad {
-        outline: 2px solid #e25555;
-        outline-offset: 1px;
-        box-shadow: 0 0 0 1px #e25555;
-      }
-      .swatch-key {
-        display: inline-block;
-        margin-top: 2px;
-        padding: 1px 4px;
-        border-radius: 2px;
-        font-size: 11px;
-        line-height: 1.2;
-        color: #fff;
-        background: rgba(0, 0, 0, 0.55);
-      }
-      #view {
-        width: 100%;
-        max-width: 420px;
-        aspect-ratio: 1;
-        background: #0e0e0e;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.12);
         display: block;
-        touch-action: none;
-        cursor: grab;
       }
-      #view.orbiting {
-        cursor: grabbing;
-      }
-      #view-hint {
-        margin: 6px 0 0;
-        font-size: 13px;
-      }
-      #step {
-        min-height: 40px;
-        margin: 8px 0 0;
-        font-size: 28px;
+      .cam-dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        display: grid;
+        place-items: center;
+        color: var(--primary);
         font-weight: 700;
+        background: #fff;
       }
-      #step-desc {
-        min-height: 1.4em;
-        margin: 4px 0 8px;
-        font-size: 18px;
-        color: #f0c24b;
+      .hint { font-size: 15px; line-height: 1.5; margin: 4px 0; }
+      .seeing { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+      .minor { text-align: center; color: var(--muted); font-size: 14px; }
+      .minor button {
+        background: transparent;
+        color: var(--muted);
+        height: auto;
+        padding: 8px;
       }
-      #speed {
-        font: inherit;
-        color: #111;
-        background: #ececec;
-        border: 0;
-        padding: 8px 10px;
-      }
+      .speeds { display: flex; justify-content: center; gap: 8px; align-items: center; }
+      .speeds button.on { background: var(--primary); color: #fff; }
+      #step { min-height: 36px; margin: 8px 0 0; font-size: 28px; font-weight: 700; }
+      #step-desc { min-height: 1.4em; margin: 4px 0 8px; font-size: 18px; color: var(--primary); }
+      select, input[type="range"] { font: inherit; }
       #guide {
         margin: 10px 0 0;
         max-height: 220px;
         overflow: auto;
         padding: 0;
         list-style: none;
-        border-top: 1px solid var(--line);
       }
       #guide li {
         display: grid;
         grid-template-columns: 2.2em 3em 1fr;
         gap: 8px;
-        padding: 6px 4px;
+        padding: 8px 4px;
         border-bottom: 1px solid var(--line);
         font-size: 14px;
         color: var(--muted);
       }
-      #guide li.current {
-        color: #fff;
-        background: rgba(240, 194, 75, 0.12);
-        font-weight: 700;
-      }
-      #guide li.done {
-        color: #7a7a7a;
-      }
-      #status {
-        margin: 0;
-        min-height: 1.4em;
-      }
+      #guide li.current { color: var(--text); font-weight: 700; }
+      #formula { white-space: pre-wrap; color: var(--muted); font-size: 13px; }
       #success {
         display: none;
-        margin-top: 12px;
+        margin: 8px 0;
         padding: 12px 14px;
         background: var(--ok);
         color: #fff;
-        font-size: 18px;
+        border-radius: 12px;
         font-weight: 700;
       }
-      #success.show {
-        display: block;
-      }
-      #formula {
-        margin: 8px 0 0;
-        white-space: pre-wrap;
-        line-height: 1.5;
-        font-size: 13px;
-        color: var(--muted);
-      }
-      #formula .current {
-        color: #fff;
-        font-weight: 700;
-      }
-      #photo-panel {
-        display: none;
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid var(--line);
-      }
-      #photo-panel.open {
-        display: block;
-      }
-      #photo-canvas {
-        width: min(100%, 360px);
-        max-width: 100%;
-        aspect-ratio: 1;
-        background: #0e0e0e;
-        display: block;
-        border: 1px solid var(--line);
-        touch-action: none;
-        cursor: grab;
-      }
-      #photo-canvas.dragging {
-        cursor: grabbing;
-      }
-      #photo-hint {
-        margin: 8px 0;
-        font-size: 16px;
-        font-weight: 700;
-        color: #f0c24b;
-      }
-      #photo-order {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin: 8px 0 10px;
-      }
+      #success.show { display: block; }
+      #photo-hint { font-size: 16px; font-weight: 700; }
+      #photo-order { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
       #photo-order .shot {
         display: flex;
         align-items: center;
         gap: 6px;
+        height: auto;
         padding: 6px 8px;
+        border-radius: 10px;
         border: 1px solid var(--line);
-        font-size: 13px;
+        background: #fff;
         color: var(--muted);
-        cursor: pointer;
-        background: transparent;
-        font: inherit;
+        font-size: 13px;
       }
-      #photo-order .shot:hover {
-        border-color: #f0c24b;
-        color: #fff;
-      }
-      #photo-order .shot .dot {
-        width: 14px;
-        height: 14px;
-        border: 1px solid #111;
-        flex: 0 0 auto;
-      }
-      #photo-order .shot.current {
-        border-color: #f0c24b;
-        color: #fff;
-        background: rgba(240, 194, 75, 0.12);
-        font-weight: 700;
-      }
-      #photo-order .shot.done {
-        color: #8dcc9a;
-        border-color: #2f6b3c;
-      }
-      #photo-size-label {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        min-width: 140px;
-      }
-      #photo-size {
-        width: 120px;
-        vertical-align: middle;
-      }
-      .badge {
-        display: inline-block;
-        margin-left: 6px;
-        padding: 1px 6px;
-        border-radius: 3px;
-        font-size: 12px;
-        background: #5a4a12;
-        color: #f0c24b;
+      #photo-order .shot.current { border-color: var(--primary); color: var(--text); font-weight: 700; }
+      #photo-order .shot .dot { width: 14px; height: 14px; }
+      #net, #counts { display: none; }
+      .card {
+        background: var(--card);
+        border-radius: 18px;
+        padding: 14px;
+        margin-top: 12px;
       }
     </style>
   </head>
   <body>
-    <main>
-      <header class="span">
-        <h1>FollowCube</h1>
-        <p class="muted">填好颜色 → 求解 → 自动快放，或按「下一步」跟着实体魔方同步转</p>
-      </header>
+    <div class="app">
+      <section class="screen active" id="screen-home" data-screen="home">
+        <h1>跟着还原魔方</h1>
+        <p class="muted">填颜色、拍照，或先练一练，再一步步跟着转。</p>
+        <button class="menu" type="button" data-go="paint">
+          <span class="mark fill">填</span>
+          <span><b>我来填色</b><span class="muted">转动魔方，点贴纸填上颜色</span></span>
+        </button>
+        <button class="menu" type="button" data-go="camera">
+          <span class="mark cam">拍</span>
+          <span><b>拍照识别</b><span class="muted">按中心色拍六个面，自动填进魔方</span></span>
+        </button>
+        <button class="menu" type="button" data-go="practice">
+          <span class="mark practice">练</span>
+          <span><b>练一练</b><span class="muted">从还原好的魔方开始，自己转，或看它怎么还原</span></span>
+        </button>
+        <button class="menu" type="button" data-go="follow">
+          <span class="mark go">转</span>
+          <span><b>跟着转</b><span class="muted" id="follow-tip">先填色或拍照，求出步骤后再来</span></span>
+        </button>
+      </section>
 
-      <section class="panel">
-        <strong>1. 填色</strong>
-        <span class="badge">拍照识别为实验功能</span>
-        <p class="muted">
-          推荐先用「拍照填色」一次拍六个面；识别不准再点格子改。也可鼠标选色，或先点一个面再按
-          <strong>1–6</strong>
-          填（1白 2红 3绿 4黄 5橙 6蓝）。中心色固定。
-        </p>
-        <div class="row" id="palette"></div>
-        <div class="row">
-          <button type="button" class="primary" id="btn-photo">拍照填色</button>
-          <button type="button" id="btn-solved">从已还原开始</button>
-          <button type="button" id="btn-clear">全部清空</button>
-          <button type="button" id="btn-sample">填入示例打乱</button>
-          <button type="button" id="btn-solve">求解</button>
+      <section class="screen" id="screen-paint" data-screen="paint">
+        <button class="back" type="button" data-go="home">返回</button>
+        <p class="hint" id="paint-hint">先选下面的颜色，再点魔方上的贴纸</p>
+        <p class="seeing" id="paint-seeing">正在看 上面 · 前面 · 右面</p>
+        <div class="stage"><canvas id="paint-view" width="640" height="640"></canvas></div>
+        <div class="palette">
+          <button class="chip" type="button" id="btn-photo">
+            <span class="cam-dot">拍</span>
+            <span>拍照</span>
+          </button>
+          <div id="palette" style="display:contents"></div>
         </div>
+        <div class="row">
+          <button class="primary grow" type="button" id="btn-solve">还原</button>
+          <button type="button" id="btn-clear">重置</button>
+        </div>
+        <p class="minor">
+          <button type="button" id="btn-sample">示例打乱</button>
+          ·
+          <button type="button" id="btn-solved">已还原</button>
+        </p>
+        <div id="net"></div>
+        <p id="counts"></p>
+        <div class="status-host"></div>
+      </section>
+
+      <section class="screen" id="screen-camera" data-screen="camera">
+        <button class="back" type="button" id="btn-photo-cancel">返回</button>
         <div id="photo-panel">
-          <p class="muted">
-            按中心色认面：①白 ②红 ③绿 ④黄 ⑤橙 ⑥蓝。点上方某一面可单独重拍该面；不必六面重来。
-          </p>
+          <p class="muted">按中心色认面：白、红、绿、黄、橙、蓝。点某一面可以单独重拍。照片只在这台设备上处理。</p>
           <div id="photo-order" aria-label="拍照顺序"></div>
-          <p id="photo-hint">第 1/6 张：请拍白心面（上面 U）</p>
+          <p id="photo-hint">请拍白心面</p>
           <canvas id="photo-canvas" width="480" height="480"></canvas>
           <div class="row">
-            <button type="button" class="primary" id="btn-photo-shot">拍照 / 选图</button>
+            <button class="primary" type="button" id="btn-photo-shot">拍摄这一面</button>
             <button type="button" id="btn-photo-confirm" disabled>确认识别</button>
+          </div>
+          <div class="row">
             <button type="button" id="btn-photo-smaller" disabled>缩小框</button>
             <button type="button" id="btn-photo-bigger" disabled>放大框</button>
             <label class="muted" id="photo-size-label">
               大小
-              <input
-                id="photo-size"
-                type="range"
-                min="10"
-                max="98"
-                value="55"
-                disabled
-                aria-label="九宫格大小"
-              />
+              <input id="photo-size" type="range" min="10" max="98" value="55" disabled aria-label="九宫格大小" />
             </label>
             <button type="button" id="btn-photo-rot-left" disabled>左转</button>
             <button type="button" id="btn-photo-rot-right" disabled>右转</button>
             <button type="button" id="btn-photo-retake" disabled>重拍本面</button>
             <button type="button" id="btn-photo-next" disabled>下一张</button>
-            <button type="button" id="btn-photo-cancel">取消</button>
           </div>
-          <input
-            id="photo-input"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-          />
+          <input id="photo-input" type="file" accept="image/*" capture="environment" hidden />
           <p class="muted" id="photo-progress">第 1/6 张</p>
         </div>
-        <p id="counts"></p>
-        <div id="net"></div>
+        <div class="status-host"></div>
       </section>
 
-      <section class="panel">
-        <strong>2. 跟着还原</strong>
+      <section class="screen" id="screen-practice" data-screen="practice">
+        <button class="back" type="button" data-go="home">返回首页</button>
+        <p class="hint" id="prac-hint">这是还原好的魔方。滑动色块转这一面，滑动空白处换个角度看</p>
+        <div class="stage" id="practice-stage"></div>
+        <div id="prac-free">
+          <div class="row">
+            <button class="grow" type="button" id="prac-scramble">随机打乱</button>
+            <button class="primary grow" type="button" id="prac-solve">还原</button>
+          </div>
+        </div>
+        <div id="prac-guide" hidden>
+          <div class="speeds" id="prac-speeds">
+            <span class="muted">播放速度</span>
+            <button type="button" data-speed="slow">低速</button>
+            <button type="button" data-speed="medium" class="on">中速</button>
+            <button type="button" data-speed="fast">高速</button>
+          </div>
+          <p class="seeing" id="prac-step"></p>
+          <div class="row">
+            <button class="grow" type="button" id="prac-prev">上一步</button>
+            <button class="grow" type="button" id="prac-next">下一步</button>
+          </div>
+          <div class="row">
+            <button class="grow" type="button" id="prac-back">返回</button>
+            <button class="primary grow" type="button" id="prac-auto">自动</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-follow" data-screen="follow">
+        <button class="back" type="button" data-go="home">返回首页</button>
         <p id="status">求解器准备中…</p>
         <p id="step"></p>
         <p id="step-desc"></p>
         <div class="row">
           <button type="button" id="btn-prev" disabled>上一步</button>
           <button type="button" id="btn-next" disabled>下一步</button>
-          <button type="button" class="primary" id="btn-auto" disabled>自动还原</button>
+          <button class="primary" type="button" id="btn-auto" disabled>自动</button>
           <button type="button" id="btn-restart" disabled>从头再跟</button>
-          <button type="button" id="btn-view-reset" title="恢复默认观看角度">复位视角</button>
-          <label class="muted">
-            转速
-            <select id="speed" aria-label="转动速度">
-              <option value="slow" selected>慢（适合小朋友）</option>
-              <option value="medium">中</option>
-              <option value="fast">快</option>
-            </select>
-          </label>
+          <button type="button" id="btn-view-reset">复位视角</button>
         </div>
-        <div id="success">还原成功！可以对照实体魔方检查六个面。</div>
-        <canvas id="view" width="640" height="640"></canvas>
-        <p class="muted" id="view-hint">拖动魔方可旋转查看各面；双击或点「复位视角」回到默认角度</p>
+        <div class="speeds" id="follow-speeds">
+          <span class="muted">播放速度</span>
+          <button type="button" data-speed="slow">低速</button>
+          <button type="button" data-speed="medium" class="on">中速</button>
+          <button type="button" data-speed="fast">高速</button>
+        </div>
+        <select id="speed" hidden aria-label="转动速度">
+          <option value="slow">低速</option>
+          <option value="medium" selected>中速</option>
+          <option value="fast">高速</option>
+        </select>
+        <div id="success">还原成功</div>
+        <div class="stage" id="follow-stage">
+          <canvas id="view" width="640" height="640"></canvas>
+        </div>
+        <p class="muted" id="view-hint">拖动空白处转动视角，双击或点「复位视角」回到默认角度</p>
         <pre id="formula"></pre>
         <ol id="guide" aria-label="每一步操作说明"></ol>
       </section>
-    </main>
+    </div>
 
     <script type="importmap">
       {

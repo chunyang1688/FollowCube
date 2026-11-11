@@ -65,4 +65,12 @@ r = last();
 if (r.type !== 'error' || r.requestId !== 4) throw new Error('FAIL: 长度错误未拦截');
 console.log('PASS 4: 长度校验正常');
 
+// 5. 部分基础库把载荷直接作为 onMessage 参数，不包在 message 里
+handler({ type: 'solve', state: SCRAMBLED, requestId: 5 });
+r = last();
+if (r.type !== 'result' || r.requestId !== 5 || !r.solved) {
+  throw new Error('FAIL: 直接载荷形态未被识别 - ' + JSON.stringify(r));
+}
+console.log('PASS 5: 直接载荷消息可求解');
+
 console.log('ALL PASS');

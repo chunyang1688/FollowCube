@@ -5,10 +5,12 @@
 // wx.authorize('scope.camera')），以微信官方最新规则为准。
 App({
   globalData: {
-    // 当前求解结果，供跟做分包读取（分包与主包共享同一 JS 运行环境）
+    // 54 位颜色，顺序 U R F D L B。null 表示还没填过，填色页会显示只剩中心色的魔方
+    facelets: null,
+    // 当前求解结果，供跟做页读取
     solution: null, // { state, solution, tokens, steps, moveCount, solveMs }
     solverReady: false,
-    // 拍照页完成六面录入后回填给首页的 54 格状态，首页 onShow 取用后立即清空
+    // 拍照页写完六面后交给填色页，填色页 onShow 取用后清空
     capturedFacelets: null
   },
 

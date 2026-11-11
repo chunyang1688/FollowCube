@@ -7,6 +7,8 @@
       "name": "packageFollow",
       "root": "packageFollow",
       "pages": [
+        "pages/paint/paint",
+        "pages/practice/practice",
         "pages/follow/follow"
       ]
     },
@@ -24,14 +26,20 @@
       "packages": [
         "packageFollow"
       ]
+    },
+    "packageFollow/pages/paint/paint": {
+      "network": "all",
+      "packages": [
+        "packageCamera"
+      ]
     }
   },
   "workers": "workers",
   "window": {
-    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarBackgroundColor": "#fff6ea",
     "navigationBarTitleText": "跟着还原魔方",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#f2f3f5",
+    "backgroundColor": "#fff6ea",
     "backgroundTextStyle": "dark",
     "enablePullDownRefresh": false
   },

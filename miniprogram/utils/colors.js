@@ -163,7 +163,7 @@ function describeStickers(indexes, facelets) {
 }
 
 /**
- * 找出不合法的角/棱，并标出展开图上应对的格子。
+ * 找出不合法的角/棱，cells 是 54 格下标，填色页用来把对应贴纸标红。
  * @returns {{ message: string|null, cells: number[] }}
  */
 function diagnoseFacelets(facelets) {
@@ -231,7 +231,7 @@ function diagnoseFacelets(facelets) {
   const uniq = [...new Set(cells)];
   if (hints.length) {
     return {
-      message: hints.slice(0, 2).join("。") + "。请改展开图上标红的格后再求解",
+      message: hints.slice(0, 2).join("。") + "。请转一转，改标红的贴纸后再求解",
       cells: uniq
     };
   }

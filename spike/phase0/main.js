@@ -7,7 +7,9 @@ import {
   Mesh,
   MeshLambertMaterial,
   PerspectiveCamera,
+  Raycaster,
   Scene,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from "three";
@@ -30,7 +32,7 @@ import {
   explainVerify,
   solvedFacelets,
 } from "./colors.js";
-import { SCRAMBLED } from "./state.js";
+import { turnToken } from "./gesture.js";
 import { animationAngle, describeMove, invertToken, parseMove } from "./turns.js";
 import {
   clampGuideRect,
@@ -78,7 +80,7 @@ const btnPhotoRetake = document.querySelector("#btn-photo-retake");
 const btnPhotoNext = document.querySelector("#btn-photo-next");
 const btnPhotoCancel = document.querySelector("#btn-photo-cancel");
 
-let brush = "U";
+let brush = "R";
 let facelets = solvedFacelets();
 let activeFace = "U";
 let slotIndex = 0; // FACE_SLOTS 里的下标
@@ -88,36 +90,43 @@ let tokens = [];
 let pending = [];
 let cursor = -1;
 let phase = "edit"; // edit | ready | play | done
+let screen = "home";
+let solveMode = "follow";
+let practiceMode = "free";
+let demoQueue = null;
+let cubeDirty = false;
 let autoPlay = false;
 let twist = null;
 let moveDuration = 900;
 
 const SPEED_MS = {
-  slow: { next: 900, auto: 480 },
-  medium: { next: 550, auto: 240 },
-  fast: { next: 300, auto: 130 },
+  slow: { next: 1100, auto: 1100 },
+  medium: { next: 560, auto: 560 },
+  fast: { next: 260, auto: 260 },
 };
 const FACE_FLOW = NET_LAYOUT.map((item) => item.face);
 
 function currentSpeed() {
-  return SPEED_MS[speedEl.value] || SPEED_MS.slow;
+  return SPEED_MS[speedEl.value] || SPEED_MS.medium;
 }
 
 // ——— 填色展开图 ———
 
+const PALETTE_KEYS = ["R", "L", "D", "U", "B", "F"];
+
+/** 色板按红橙黄白蓝绿排列，和填色页的点选顺序一致。 */
 function renderPalette() {
   paletteEl.replaceChildren();
-  COLOR_ORDER.forEach((color, i) => {
+  PALETTE_KEYS.forEach((color) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "swatch" + (brush === color ? " active" : "");
-    button.style.background = COLOR_HEX[color];
-    button.title = COLOR_NAME[color] + "（按键 " + (i + 1) + "）";
+    button.className = "chip" + (brush === color ? " on" : "");
     button.setAttribute("aria-label", COLOR_NAME[color]);
-    const key = document.createElement("span");
-    key.className = "swatch-key";
-    key.textContent = String(i + 1);
-    button.append(key);
+    const dot = document.createElement("i");
+    dot.style.background = COLOR_HEX[color];
+    const name = document.createElement("span");
+    name.textContent = COLOR_NAME[color];
+    button.append(dot, name);
     button.addEventListener("click", () => {
       brush = color;
       renderPalette();
@@ -126,15 +135,19 @@ function renderPalette() {
   });
 }
 
+/** 把还没填完、或颜色对不上的情况写到填色页顶部。 */
 function renderCounts() {
-  const counts = countColors(facelets);
-  const faceTip = activeFace
-    ? " · 当前面 " + FACE_TITLE[activeFace] + "，下一格高亮"
-    : "";
-  countsEl.textContent =
-    COLOR_ORDER.map((color) => COLOR_NAME[color] + " " + counts[color] + "/9").join(
-      " · ",
-    ) + faceTip;
+  const problem = countError(facelets);
+  const diag = diagnoseFacelets(facelets);
+  let hint = "颜色齐了，点「还原」求出步骤";
+  if (problem) {
+    hint = problem.indexOf("没填") >= 0 ? problem + "，上下滑可以看背面" : problem;
+  } else if (diag.message) {
+    hint = "有格子对不上，转一转看标红的贴纸";
+  }
+  const paintHint = document.querySelector("#paint-hint");
+  if (paintHint) paintHint.textContent = hint;
+  countsEl.textContent = hint;
 }
 
 function selectFace(face, localSlot) {
@@ -178,7 +191,7 @@ function advanceSlot() {
 
 function fillByKey(color) {
   if (!activeFace) {
-    statusEl.textContent = "先点展开图上的一个面，再按 1–6 填色";
+    statusEl.textContent = "先在填色页点一个面，再按 1–6 填色";
     return;
   }
   const faceIndex = COLOR_ORDER.indexOf(activeFace);
@@ -235,6 +248,7 @@ function renderNet() {
     face.append(title, grid);
     netEl.append(face);
   }
+  syncPaintCube();
 }
 
 function setFacelets(next) {
@@ -248,6 +262,7 @@ function setFacelets(next) {
 }
 
 document.addEventListener("keydown", (event) => {
+  if (screen !== "paint") return;
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   const tag = event.target && event.target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -262,6 +277,7 @@ document.addEventListener("keydown", (event) => {
 const canvas = document.querySelector("#view");
 const renderer = new WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0xfff6ea, 1);
 
 const scene = new Scene();
 const camera = new PerspectiveCamera(40, 1, 0.1, 100);
@@ -424,6 +440,106 @@ function materialFacing(cubie, dir) {
   return best;
 }
 
+const followRay = new Raycaster();
+const followPointer = new Vector2();
+
+/** 把射线打到的法向收成 ±1，避免浮点对不上六个面。 */
+function snap3(v) {
+  return [v.x, v.y, v.z].map((n) => (Math.abs(n) < 0.5 ? 0 : n > 0 ? 1 : -1));
+}
+
+/** 练一练：找到手指点中的那一块，返回世界法向和块心。点空返回 null。 */
+function pickFollowFace(event) {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  followPointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  followPointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  followRay.setFromCamera(followPointer, camera);
+  const hits = followRay.intersectObjects(cubies, false);
+  if (!hits.length || !hits[0].face) return null;
+  const mesh = hits[0].object;
+  const local = LOCAL_DIR[hits[0].face.materialIndex];
+  if (!local) return null;
+  worldDir.copy(local).applyQuaternion(mesh.quaternion);
+  const normal = snap3(worldDir);
+  if (normal.filter((n) => n !== 0).length !== 1) return null;
+  return {
+    normal,
+    pos: [Math.round(mesh.position.x), Math.round(mesh.position.y), Math.round(mesh.position.z)],
+  };
+}
+
+/** 屏幕拖动换成转动记号。dx 向右为正，dy 向下为正。太短则不转。 */
+function turnFromFollowDrag(pick, dx, dy) {
+  if (!pick || Math.hypot(dx, dy) < 24) return null;
+  camera.updateMatrixWorld(true);
+  const e = camera.matrixWorld.elements;
+  const drag = [
+    e[0] * dx - e[4] * dy,
+    e[1] * dx - e[5] * dy,
+    e[2] * dx - e[6] * dy,
+  ];
+  return turnToken(pick.normal, pick.pos, drag);
+}
+
+const CELL_AT = {
+  U: (r, c) => [c - 1, 1, r - 1],
+  R: (r, c) => [1, 1 - r, 1 - c],
+  F: (r, c) => [c - 1, 1 - r, 1],
+  D: (r, c) => [c - 1, -1, 1 - r],
+  L: (r, c) => [-1, 1 - r, c - 1],
+  B: (r, c) => [1 - c, 1 - r, -1],
+};
+const CELL_N = {
+  U: new Vector3(0, 1, 0),
+  R: new Vector3(1, 0, 0),
+  F: new Vector3(0, 0, 1),
+  D: new Vector3(0, -1, 0),
+  L: new Vector3(-1, 0, 0),
+  B: new Vector3(0, 0, -1),
+};
+
+/** 从跟做模型读出 54 色。练一练求解和示例打乱都靠它，不再使用固定打乱串。 */
+function readCubeFacelets() {
+  let out = "";
+  for (const face of COLOR_ORDER) {
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        const [x, y, z] = CELL_AT[face](r, c);
+        const cubie = cubies.find(
+          (mesh) =>
+            Math.round(mesh.position.x) === x &&
+            Math.round(mesh.position.y) === y &&
+            Math.round(mesh.position.z) === z,
+        );
+        if (!cubie) {
+          out += "?";
+          continue;
+        }
+        const mat = materialFacing(cubie, CELL_N[face]);
+        const key = COLOR_ORDER.find((name) => materials[name] === mat);
+        out += key || "?";
+      }
+    }
+  }
+  return out;
+}
+
+/** 随机合法转动。相邻两步不转同一面，避免打乱被抵消。 */
+function randomMoveTokens(count) {
+  const faces = ["U", "R", "F", "D", "L", "B"];
+  const suffix = ["", "'", "2"];
+  const out = [];
+  let prev = "";
+  for (let i = 0; i < count; i++) {
+    let face = prev;
+    while (face === prev) face = faces[Math.floor(Math.random() * faces.length)];
+    prev = face;
+    out.push(face + suffix[Math.floor(Math.random() * suffix.length)]);
+  }
+  return out;
+}
+
 function visualSolved() {
   for (const face of FACE_DIR) {
     for (const cubie of cubies) {
@@ -443,8 +559,23 @@ function resizeRenderer() {
   camera.updateProjectionMatrix();
 }
 
+let viewGesture = null;
+
+/** 练一练里点在色块上是转这一面，点在空白处才转视角。跟做页始终转视角。 */
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
+  const turning =
+    screen === "practice" && practiceMode === "free" && !twist && !demoQueue;
+  const pick = turning ? pickFollowFace(event) : null;
+  viewGesture = {
+    x: event.clientX,
+    y: event.clientY,
+    pick,
+  };
+  if (pick) {
+    canvas.setPointerCapture(event.pointerId);
+    return;
+  }
   orbit.dragging = true;
   orbit.moved = false;
   orbit.lx = event.clientX;
@@ -453,6 +584,7 @@ canvas.addEventListener("pointerdown", (event) => {
   canvas.setPointerCapture(event.pointerId);
 });
 canvas.addEventListener("pointermove", (event) => {
+  if (viewGesture && viewGesture.pick) return;
   if (!orbit.dragging) return;
   const dx = event.clientX - orbit.lx;
   const dy = event.clientY - orbit.ly;
@@ -464,6 +596,23 @@ canvas.addEventListener("pointermove", (event) => {
   applyOrbitCamera();
 });
 function endOrbitDrag(event) {
+  const gesture = viewGesture;
+  viewGesture = null;
+  if (gesture && gesture.pick) {
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    const token = turnFromFollowDrag(gesture.pick, dx, dy);
+    if (token) {
+      moveDuration = 320;
+      startTwist(parseMove(token), performance.now());
+    }
+    try {
+      canvas.releasePointerCapture(event.pointerId);
+    } catch {
+      // 指针已经松开时不必再释放
+    }
+    return;
+  }
   if (!orbit.dragging) return;
   orbit.dragging = false;
   canvas.classList.remove("orbiting");
@@ -509,6 +658,8 @@ function setControls() {
     (phase === "ready" || phase === "play" || phase === "done")
   );
   btnSolve.disabled = !solverReady || Boolean(twist);
+  setPracticeChrome();
+  updateFollowTip();
 }
 
 function showStep(token, desc) {
@@ -557,6 +708,7 @@ function renderFormula() {
     li.append(n, code, text);
     guideEl.append(li);
   });
+  updatePracticeStep();
 }
 
 function hideSuccess() {
@@ -569,6 +721,11 @@ function showSuccess() {
   showStep("成功", "六个面颜色都对齐了");
   phase = "done";
   autoPlay = false;
+  if (screen === "practice") {
+    const hint = document.querySelector("#prac-hint");
+    if (hint) hint.textContent = "还原完成";
+    setPracticeChrome();
+  }
   cursor = tokens.length - 1;
   pending = [];
   renderFormula();
@@ -611,7 +768,27 @@ function poseScramble() {
 }
 
 function finishMove() {
+  if (demoQueue) {
+    if (demoQueue.length) {
+      const token = demoQueue.shift();
+      startTwist(parseMove(token), performance.now());
+      return;
+    }
+    demoQueue = null;
+    const pracHint = document.querySelector("#prac-hint");
+    if (pracHint) pracHint.textContent = "打乱好了。可以自己转回去，也可以点「还原」看步骤";
+    return;
+  }
   if (!pending.length) {
+    if (screen === "practice" && practiceMode === "free") {
+      const pracHint = document.querySelector("#prac-hint");
+      if (visualSolved()) {
+        if (pracHint) pracHint.textContent = "自己转回来了";
+      } else if (pracHint) {
+        pracHint.textContent = "滑动色块转这一面，滑动空白处换个角度看";
+      }
+      return;
+    }
     if (visualSolved()) showSuccess();
     else {
       statusEl.textContent = "步骤播完了，但画面没有对齐，请点「从头再跟」";
@@ -688,6 +865,7 @@ function frame(now) {
     playOne(now);
   }
   renderer.render(scene, camera);
+  paintTick();
   requestAnimationFrame(frame);
 }
 
@@ -731,6 +909,18 @@ worker.onmessage = (event) => {
   tokens = msg.solution.split(/\s+/).filter(Boolean);
   statusEl.textContent = "求出 " + msg.moveCount + " 步，用时 " + msg.solveMs.toFixed(0) + "ms";
   poseScramble();
+  cubeDirty = false;
+  if (solveMode === "practice") {
+    practiceMode = "guide";
+    const pracHint = document.querySelector("#prac-hint");
+    if (pracHint) pracHint.textContent = "看清这一步再转。速度可以随时换";
+    setPracticeChrome();
+    updatePracticeStep();
+    showScreen("practice", { keepCube: true });
+  } else {
+    showScreen("follow");
+  }
+  updateFollowTip();
 };
 
 function requestSolve() {
@@ -766,12 +956,9 @@ function requestSolve() {
   errorCells = new Set();
   renderNet();
   if (state === SOLVED) {
-    tokens = [];
-    pending = [];
-    resetSolvedPose();
-    phase = "done";
-    showSuccess();
-    statusEl.textContent = "已经是还原状态，不用求解";
+    statusEl.textContent = "已经是还原状态";
+    const hint = document.querySelector(solveMode === "practice" ? "#prac-hint" : "#paint-hint");
+    if (hint) hint.textContent = "已经是还原状态";
     return;
   }
   statusEl.textContent = "求解中…";
@@ -1051,6 +1238,7 @@ function openPhotoFlow() {
 function closePhotoFlow() {
   photoPanel.classList.remove("open");
   clearPhotoStage();
+  if (screen === "camera") showScreen("paint");
 }
 
 async function handlePhotoFile(file) {
@@ -1225,10 +1413,11 @@ photoCanvas.addEventListener("pointercancel", endGuideDrag);
 
 btnPhoto.addEventListener("click", () => {
   openPhotoFlow();
+  showScreen("camera");
 });
 btnPhotoCancel.addEventListener("click", () => {
   closePhotoFlow();
-  statusEl.textContent = "已取消拍照填色，可继续手改展开图";
+  statusEl.textContent = "已取消拍照，可继续在立体魔方上改颜色";
 });
 btnPhotoShot.addEventListener("click", () => {
   photoInput.click();
@@ -1274,7 +1463,7 @@ btnPhotoNext.addEventListener("click", () => {
     const unsure = countColors(facelets)["?"] || 0;
     statusEl.textContent = unsure
       ? "六面识别完成，还有 " + unsure + " 格不确定，请点灰格手改后再求解"
-      : "六面识别完成，请核对展开图后点求解。某面不对可再点「拍照填色」单独重拍";
+      : "六面识别完成，已填进立体魔方。转一转核对后再点还原";
     return;
   }
   photoIndex = next;
@@ -1298,11 +1487,18 @@ document.querySelector("#btn-clear").addEventListener("click", () => {
   statusEl.textContent = "已清空，中心色保留，请填其余 48 格";
 });
 document.querySelector("#btn-sample").addEventListener("click", () => {
-  closePhotoFlow();
-  setFacelets(SCRAMBLED.split(""));
-  statusEl.textContent = "已填入示例打乱，可直接点求解";
+  if (twist) return;
+  resetSolvedPose();
+  for (const token of randomMoveTokens(22)) applyInstant(parseMove(token));
+  const state = readCubeFacelets();
+  resetSolvedPose();
+  setFacelets(state.split(""));
+  statusEl.textContent = "已填入示例打乱，可直接点还原";
 });
-btnSolve.addEventListener("click", requestSolve);
+btnSolve.addEventListener("click", () => {
+  solveMode = "follow";
+  requestSolve();
+});
 
 btnAuto.addEventListener("click", () => {
   if (!pending.length || twist) return;
@@ -1333,7 +1529,346 @@ speedEl.addEventListener("change", () => {
   if (!twist) moveDuration = currentSpeed().next;
 });
 
+const paintCanvas = document.querySelector("#paint-view");
+const paintRenderer = new WebGLRenderer({ canvas: paintCanvas, antialias: true });
+paintRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+paintRenderer.setClearColor(0xfff6ea, 1);
+const paintScene = new Scene();
+const paintCamera = new PerspectiveCamera(38, 1, 0.1, 100);
+paintScene.add(new AmbientLight(0xffffff, 0.85));
+const paintLight = new DirectionalLight(0xffffff, 0.55);
+paintLight.position.set(4, 6, 5);
+paintScene.add(paintLight);
+const paintGeo = new BoxGeometry(0.9, 0.9, 0.9);
+const paintPieces = [];
+for (let x = -1; x <= 1; x++) {
+  for (let y = -1; y <= 1; y++) {
+    for (let z = -1; z <= 1; z++) {
+      if (x === 0 && y === 0 && z === 0) continue;
+      const mats = LOCAL_DIR.map(() => new MeshLambertMaterial({ color: 0xe4ddd4 }));
+      const mesh = new Mesh(paintGeo, mats);
+      mesh.position.set(x, y, z);
+      mesh.userData.pos = [x, y, z];
+      paintScene.add(mesh);
+      paintPieces.push(mesh);
+    }
+  }
+}
+const paintRay = new Raycaster();
+const paintPointer = new Vector2();
+const PAINT_UP = Math.acos(1 / Math.sqrt(3));
+let paintTheta = Math.PI / 4;
+let paintPhi = PAINT_UP;
+let paintAnim = null;
+let paintGesture = null;
+
+/** 填色魔方每次只停在看得到三个面的角上，避免斜看时点不准。 */
+function applyPaintCamera() {
+  const radius = 7.4;
+  paintCamera.position.set(
+    radius * Math.sin(paintPhi) * Math.sin(paintTheta),
+    radius * Math.cos(paintPhi),
+    radius * Math.sin(paintPhi) * Math.cos(paintTheta),
+  );
+  paintCamera.lookAt(0, 0, 0);
+  const seeing = document.querySelector("#paint-seeing");
+  if (!seeing) return;
+  const x = Math.sin(paintPhi) * Math.sin(paintTheta);
+  const y = Math.cos(paintPhi);
+  const z = Math.sin(paintPhi) * Math.cos(paintTheta);
+  seeing.textContent =
+    "正在看 " +
+    [y >= 0 ? "上面" : "下面", z >= 0 ? "前面" : "后面", x >= 0 ? "右面" : "左面"].join(" · ");
+}
+
+function resizePaint() {
+  const width = paintCanvas.clientWidth;
+  const height = paintCanvas.clientHeight;
+  if (!width || !height) return;
+  paintRenderer.setSize(width, height, false);
+  paintCamera.aspect = width / height;
+  paintCamera.updateProjectionMatrix();
+}
+
+function paintColorHex(key) {
+  if (key === "U") return 0xf5f5f5;
+  if (key === "D") return 0xffd500;
+  if (key === "R") return 0xb71234;
+  if (key === "L") return 0xff6b1a;
+  if (key === "F") return 0x009b48;
+  if (key === "B") return 0x0046ad;
+  return 0xe4ddd4;
+}
+
+/** 按 54 格给填色魔方上色，不合法的格子加一点红。展开图仍隐藏，只给旧逻辑用。 */
+function syncPaintCube() {
+  if (!paintPieces.length) return;
+  COLOR_ORDER.forEach((face, faceIndex) => {
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        const gi = faceIndex * 9 + r * 3 + c;
+        const pos = CELL_AT[face](r, c);
+        const mesh = paintPieces.find(
+          (item) => item.userData.pos[0] === pos[0] && item.userData.pos[1] === pos[1] && item.userData.pos[2] === pos[2],
+        );
+        if (!mesh) continue;
+        const normal = CELL_N[face];
+        const matIndex = LOCAL_DIR.findIndex(
+          (dir) => dir.x === normal.x && dir.y === normal.y && dir.z === normal.z,
+        );
+        if (matIndex < 0) continue;
+        mesh.material[matIndex].color.setHex(paintColorHex(facelets[gi]));
+        mesh.material[matIndex].emissive.setHex(errorCells.has(gi) ? 0x662222 : 0x000000);
+      }
+    }
+  });
+}
+
+function paintTick() {
+  if (!paintCanvas.clientWidth) return;
+  if (paintAnim) {
+    const u = Math.min(1, (performance.now() - paintAnim.t0) / 260);
+    const k = u < 0.5 ? 4 * u * u * u : 1 - ((-2 * u + 2) ** 3) / 2;
+    paintTheta = paintAnim.theta + (paintAnim.toTheta - paintAnim.theta) * k;
+    paintPhi = paintAnim.phi + (paintAnim.toPhi - paintAnim.phi) * k;
+    if (u >= 1) paintAnim = null;
+  }
+  resizePaint();
+  applyPaintCamera();
+  paintRenderer.render(paintScene, paintCamera);
+}
+
+function paintTurn(dir) {
+  if (paintAnim) return;
+  paintAnim = {
+    theta: paintTheta,
+    phi: paintPhi,
+    toTheta: paintTheta + dir * (Math.PI / 2),
+    toPhi: paintPhi,
+    t0: performance.now(),
+  };
+}
+
+function paintFlip() {
+  if (paintAnim) return;
+  paintAnim = {
+    theta: paintTheta,
+    phi: paintPhi,
+    toTheta: paintTheta,
+    toPhi: Math.abs(paintPhi - PAINT_UP) < 0.01 ? Math.PI - PAINT_UP : PAINT_UP,
+    t0: performance.now(),
+  };
+}
+
+/** 点在贴纸上就填当前颜色。中心色固定，用来认面。 */
+function paintAtPointer(event) {
+  const rect = paintCanvas.getBoundingClientRect();
+  if (!rect.width || !rect.height || paintAnim) return;
+  paintPointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  paintPointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  paintRay.setFromCamera(paintPointer, paintCamera);
+  const hits = paintRay.intersectObjects(paintPieces, false);
+  if (!hits.length || !hits[0].face) return;
+  const mesh = hits[0].object;
+  const local = LOCAL_DIR[hits[0].face.materialIndex];
+  if (!local) return;
+  const pos = mesh.userData.pos;
+  let face = "";
+  COLOR_ORDER.forEach((name) => {
+    const normal = CELL_N[name];
+    if (normal.x === local.x && normal.y === local.y && normal.z === local.z) face = name;
+  });
+  if (!face) return;
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const at = CELL_AT[face](r, c);
+      if (at[0] !== pos[0] || at[1] !== pos[1] || at[2] !== pos[2]) continue;
+      if (r === 1 && c === 1) {
+        statusEl.textContent = "中心色固定";
+        return;
+      }
+      const gi = COLOR_ORDER.indexOf(face) * 9 + r * 3 + c;
+      facelets[gi] = brush;
+      invalidateSolution();
+      renderNet();
+      renderCounts();
+      return;
+    }
+  }
+}
+
+paintCanvas.addEventListener("pointerdown", (event) => {
+  paintGesture = { x: event.clientX, y: event.clientY, moved: false };
+  paintCanvas.setPointerCapture(event.pointerId);
+});
+paintCanvas.addEventListener("pointermove", (event) => {
+  if (!paintGesture) return;
+  if (Math.abs(event.clientX - paintGesture.x) > 14 || Math.abs(event.clientY - paintGesture.y) > 14) {
+    paintGesture.moved = true;
+  }
+});
+paintCanvas.addEventListener("pointerup", (event) => {
+  const start = paintGesture;
+  paintGesture = null;
+  if (!start) return;
+  const dx = event.clientX - start.x;
+  const dy = event.clientY - start.y;
+  if (!start.moved) {
+    paintAtPointer(event);
+    return;
+  }
+  if (Math.abs(dx) > Math.abs(dy)) paintTurn(dx > 0 ? 1 : -1);
+  else paintFlip();
+});
+
+/** 切换四个主页面。练一练默认从还原好的魔方开始；跟着转没有步骤时留在首页。 */
+function showScreen(name, opts = {}) {
+  if (name === "follow") {
+    if (!tokens.length) {
+      updateFollowTip();
+      return;
+    }
+    if (cubeDirty) {
+      poseScramble();
+      cubeDirty = false;
+    }
+  }
+  if (name === "practice" && !opts.keepCube) enterPractice();
+  screen = name;
+  document.querySelectorAll(".screen").forEach((el) => {
+    el.classList.toggle("active", el.dataset.screen === name);
+  });
+  if (name === "practice") document.querySelector("#practice-stage").appendChild(canvas);
+  if (name === "follow") document.querySelector("#follow-stage").appendChild(canvas);
+  const host = document.querySelector("#screen-" + name + " .status-host");
+  if (host) host.appendChild(statusEl);
+}
+
+/** 打开练一练时把模型收回还原态。原来的跟做步骤先留着，回到跟着转时再摆回去。 */
+function enterPractice() {
+  autoPlay = false;
+  demoQueue = null;
+  practiceMode = "free";
+  resetSolvedPose();
+  cubeDirty = true;
+  setPracticeChrome();
+  const hint = document.querySelector("#prac-hint");
+  if (hint) hint.textContent = "这是还原好的魔方。滑动色块转这一面，滑动空白处换个角度看";
+}
+
+function updateFollowTip() {
+  const tip = document.querySelector("#follow-tip");
+  if (!tip) return;
+  tip.textContent = tokens.length
+    ? "已有 " + tokens.length + " 步，点这里一步步转"
+    : "先填色或拍照，求出步骤后再来";
+}
+
+function updatePracticeStep() {
+  const el = document.querySelector("#prac-step");
+  if (!el) return;
+  if (practiceMode !== "guide" || !tokens.length) {
+    el.textContent = "";
+    return;
+  }
+  if (!pending.length) {
+    el.textContent = "已经还原";
+    return;
+  }
+  const index = tokens.length - pending.length + 1;
+  el.textContent = "第 " + index + " / " + tokens.length + " 步 · " + describeMove(pending[0].token);
+}
+
+function setPracticeChrome() {
+  const free = document.querySelector("#prac-free");
+  const guide = document.querySelector("#prac-guide");
+  if (free) free.hidden = practiceMode === "guide";
+  if (guide) guide.hidden = practiceMode !== "guide";
+  const autoBtn = document.querySelector("#prac-auto");
+  if (autoBtn) autoBtn.textContent = autoPlay ? "停止" : "自动";
+  const prev = document.querySelector("#prac-prev");
+  const next = document.querySelector("#prac-next");
+  if (prev) prev.disabled = cursor < 0 || Boolean(twist) || autoPlay;
+  if (next) next.disabled = !pending.length || Boolean(twist) || autoPlay;
+}
+
+function leavePracticeGuide() {
+  autoPlay = false;
+  practiceMode = "free";
+  pending = [];
+  cursor = -1;
+  phase = "edit";
+  setPracticeChrome();
+  const hint = document.querySelector("#prac-hint");
+  if (hint) {
+    hint.textContent = visualSolved()
+      ? "已经还原。可以再随机打乱，或自己转着玩"
+      : "滑动色块转这一面，滑动空白处换个角度看";
+  }
+}
+
+document.querySelector("#prac-scramble").addEventListener("click", () => {
+  if (twist || demoQueue) return;
+  resetSolvedPose();
+  cubeDirty = true;
+  const moves = randomMoveTokens(15);
+  demoQueue = moves.slice(1);
+  moveDuration = 150;
+  const hint = document.querySelector("#prac-hint");
+  if (hint) hint.textContent = "正在打乱…";
+  startTwist(parseMove(moves[0]), performance.now());
+});
+document.querySelector("#prac-solve").addEventListener("click", () => {
+  if (twist || demoQueue) return;
+  solveMode = "practice";
+  facelets = readCubeFacelets().split("");
+  requestSolve();
+});
+document.querySelector("#prac-prev").addEventListener("click", stepBack);
+document.querySelector("#prac-next").addEventListener("click", () => {
+  if (!pending.length || twist || autoPlay) return;
+  moveDuration = currentSpeed().next;
+  playOne(performance.now());
+});
+document.querySelector("#prac-back").addEventListener("click", leavePracticeGuide);
+document.querySelector("#prac-auto").addEventListener("click", () => {
+  if (autoPlay) {
+    autoPlay = false;
+    setPracticeChrome();
+    return;
+  }
+  if (!pending.length || twist) return;
+  autoPlay = true;
+  moveDuration = currentSpeed().auto;
+  phase = "play";
+  setPracticeChrome();
+  playOne(performance.now());
+});
+
+document.body.addEventListener("click", (event) => {
+  const speedBtn = event.target.closest("button[data-speed]");
+  if (speedBtn) {
+    speedEl.value = speedBtn.dataset.speed;
+    document.querySelectorAll("button[data-speed]").forEach((btn) => {
+      btn.classList.toggle("on", btn.dataset.speed === speedEl.value);
+    });
+    if (!twist) moveDuration = currentSpeed().next;
+    return;
+  }
+  const go = event.target.closest("[data-go]");
+  if (!go) return;
+  const dest = go.dataset.go;
+  if (dest === "camera") {
+    openPhotoFlow();
+    showScreen("camera");
+    return;
+  }
+  showScreen(dest);
+});
+
+applyPaintCamera();
 renderPalette();
-setFacelets(solvedFacelets());
+setFacelets(emptyFacelets());
 setControls();
 statusEl.textContent = "求解器准备中…";
+showScreen("home");
