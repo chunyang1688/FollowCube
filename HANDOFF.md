@@ -24,7 +24,7 @@
 - `小程序项目档案.md`、`真机验收清单.md`
 
 ## Working Tree
-相对已推送的 `69d90ec` 有未提交修改：求解握手、3D 跟做动画、拍照取样、首页和立体填色，以及练一练。`.workbuddy/` 仍不入库。`tools/node_modules/` 被 gitignore，不入库。
+已推送 `fbe7035`。工作区只剩不入库的 `.workbuddy/`。`tools/node_modules/` 与 `spike/phase0/node_modules/` 被 gitignore，不入库。
 
 ## Next Steps
 1. 模拟器里练一练已走过：还原好的魔方、随机打乱、求出步骤、下一步和上一步、切换高速、返回自己转。手指转面要在真机上确认，模拟器自动化拿不到触摸坐标。
