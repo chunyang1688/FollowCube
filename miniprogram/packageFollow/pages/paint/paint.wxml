@@ -37,14 +37,14 @@
   </view>
 
   <view class="actions">
-    <button class="btn btn-primary grow" bindtap="onSolve" disabled="{{solving}}">
+    <button wx:if="{{canContinue}}" class="btn btn-primary grow" bindtap="onContinue">继续跟着转</button>
+    <button wx:else class="btn btn-primary grow" bindtap="onSolve" disabled="{{solving}}">
       {{solving ? '正在还原…' : '还原'}}
     </button>
     <button class="btn" bindtap="onReset">重置</button>
   </view>
-  <view class="minor">
-    <text bindtap="onSample">示例打乱</text>
-    <text class="sep">·</text>
-    <text bindtap="onSolved">已还原</text>
+  <view class="presets">
+    <button class="preset" bindtap="onSample">示例打乱</button>
+    <button class="preset" bindtap="onSolved">已还原</button>
   </view>
 </view>

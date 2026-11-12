@@ -212,20 +212,50 @@ function faceToken(normal, positiveAroundOutward) {
   return plainIsPositive === worldPositive ? face : face + "'";
 }
 
+const LAYER_FACE = {
+  x: { 1: 'R', 0: 'M', '-1': 'L' },
+  y: { 1: 'U', 0: 'E', '-1': 'D' },
+  z: { 1: 'F', 0: 'S', '-1': 'B' }
+};
+
+// 不带撇的记号是否绕世界正轴正转。中间层 M/E/S 分别与 L/D/F 同向。
+const PLAIN_WORLD_POSITIVE = {
+  R: false, L: true, M: true,
+  U: false, D: true, E: true,
+  F: false, B: true, S: false
+};
+
 /**
- * 按手指在世界上的拖动方向，决定被点中的那一面怎么转。
- * normal、pos、drag 都是世界坐标。拖动没有长度时返回 null。
+ * 按手指拖动，转动色块所在的那一层，让色块跟着走。
+ * 点在面上时，拖动方向选出转轴，色块在这条轴上的坐标决定是外层、中间层还是里层。
+ * normal、pos、drag 都是世界坐标。拖动贴着法向、没有面上分量时返回 null。
  */
 function turnToken(normal, pos, drag) {
-  const dragLen = Math.hypot(drag[0], drag[1], drag[2]);
-  if (dragLen < 1e-6) return null;
-  let tangent = cross(normal, pos);
-  // 点在面心时，色块中心和法向平行，叉积接近 0，改用一条固定切线
-  if (dot(tangent, tangent) < 0.25) {
-    const helper = Math.abs(normal[1]) < 0.5 ? [0, 1, 0] : [1, 0, 0];
-    tangent = cross(normal, helper);
+  const along = dot(normal, drag);
+  const plane = [
+    drag[0] - normal[0] * along,
+    drag[1] - normal[1] * along,
+    drag[2] - normal[2] * along
+  ];
+  if (dot(plane, plane) < 1e-12) return null;
+  const axisVec = cross(normal, plane);
+  let axisIndex = 0;
+  if (Math.abs(axisVec[1]) > Math.abs(axisVec[axisIndex])) axisIndex = 1;
+  if (Math.abs(axisVec[2]) > Math.abs(axisVec[axisIndex])) axisIndex = 2;
+  const axisName = axisIndex === 0 ? 'x' : axisIndex === 1 ? 'y' : 'z';
+  const layer = Math.round(pos[axisIndex]);
+  const face = LAYER_FACE[axisName][layer];
+  if (!face) return null;
+  const axisUnit = [0, 0, 0];
+  axisUnit[axisIndex] = 1;
+  // 绕正轴正转时，这个色块往哪边动。色块正好在轴上时，用法向外侧一点做参照。
+  let ref = pos;
+  const spin = cross(axisUnit, pos);
+  if (dot(spin, spin) < 0.01) {
+    ref = [pos[0] + normal[0], pos[1] + normal[1], pos[2] + normal[2]];
   }
-  return faceToken(normal, dot(tangent, drag) >= 0);
+  const worldPositive = dot(cross(axisUnit, ref), plane) >= 0;
+  return PLAIN_WORLD_POSITIVE[face] === worldPositive ? face : face + "'";
 }
 
 module.exports = {

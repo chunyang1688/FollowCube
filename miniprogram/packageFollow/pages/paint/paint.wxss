@@ -99,13 +99,26 @@
   flex: 1;
 }
 
-.minor {
-  margin-top: 24rpx;
-  text-align: center;
-  color: var(--fc-muted);
-  font-size: 26rpx;
+.presets {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
 }
 
-.sep {
-  margin: 0 16rpx;
+/* 次要操作也要有按钮外形，避免被看成说明文字。 */
+.preset {
+  flex: 1;
+  margin: 0;
+  height: 72rpx;
+  line-height: 68rpx;
+  padding: 0;
+  font-size: 28rpx;
+  color: var(--fc-text);
+  background: #ffffff;
+  border: 2rpx solid var(--fc-border);
+  border-radius: 36rpx;
+}
+
+.preset::after {
+  border: none;
 }

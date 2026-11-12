@@ -57,6 +57,14 @@
       button.primary { background: var(--primary); color: #fff; }
       button:disabled { opacity: 0.45; cursor: not-allowed; }
       .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+      #screen-follow .ops { flex-wrap: nowrap; }
+      #screen-follow .ops button {
+        flex: 1;
+        min-width: 0;
+        padding: 0 4px;
+        height: 40px;
+        font-size: 13px;
+      }
       .row .grow { flex: 1; }
       .menu {
         display: flex;
@@ -135,12 +143,13 @@
       }
       .hint { font-size: 15px; line-height: 1.5; margin: 4px 0; }
       .seeing { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
-      .minor { text-align: center; color: var(--muted); font-size: 14px; }
-      .minor button {
-        background: transparent;
-        color: var(--muted);
-        height: auto;
-        padding: 8px;
+      .presets { display: flex; gap: 10px; margin-top: 4px; }
+      .presets button {
+        flex: 1;
+        height: 40px;
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--line);
       }
       .speeds { display: flex; justify-content: center; gap: 8px; align-items: center; }
       .speeds button.on { background: var(--primary); color: #fff; }
@@ -204,7 +213,7 @@
     <div class="app">
       <section class="screen active" id="screen-home" data-screen="home">
         <h1>跟着还原魔方</h1>
-        <p class="muted">填颜色、拍照，或先练一练，再一步步跟着转。</p>
+        <p class="muted">填颜色、拍照，或先练一练。</p>
         <button class="menu" type="button" data-go="paint">
           <span class="mark fill">填</span>
           <span><b>我来填色</b><span class="muted">转动魔方，点贴纸填上颜色</span></span>
@@ -216,10 +225,6 @@
         <button class="menu" type="button" data-go="practice">
           <span class="mark practice">练</span>
           <span><b>练一练</b><span class="muted">从还原好的魔方开始，自己转，或看它怎么还原</span></span>
-        </button>
-        <button class="menu" type="button" data-go="follow">
-          <span class="mark go">转</span>
-          <span><b>跟着转</b><span class="muted" id="follow-tip">先填色或拍照，求出步骤后再来</span></span>
         </button>
       </section>
 
@@ -237,13 +242,13 @@
         </div>
         <div class="row">
           <button class="primary grow" type="button" id="btn-solve">还原</button>
+          <button class="primary grow" type="button" id="btn-continue" hidden>继续跟着转</button>
           <button type="button" id="btn-clear">重置</button>
         </div>
-        <p class="minor">
+        <div class="presets">
           <button type="button" id="btn-sample">示例打乱</button>
-          ·
           <button type="button" id="btn-solved">已还原</button>
-        </p>
+        </div>
         <div id="net"></div>
         <p id="counts"></p>
         <div class="status-host"></div>
@@ -280,7 +285,7 @@
 
       <section class="screen" id="screen-practice" data-screen="practice">
         <button class="back" type="button" data-go="home">返回首页</button>
-        <p class="hint" id="prac-hint">这是还原好的魔方。滑动色块转这一面，滑动空白处换个角度看</p>
+        <p class="hint" id="prac-hint">这是还原好的魔方。按住色块，顺着那一层滑动。空白处换个角度看</p>
         <div class="stage" id="practice-stage"></div>
         <div id="prac-free">
           <div class="row">
@@ -308,11 +313,11 @@
       </section>
 
       <section class="screen" id="screen-follow" data-screen="follow">
-        <button class="back" type="button" data-go="home">返回首页</button>
+        <button class="back" type="button" data-go="paint">返回填色</button>
         <p id="status">求解器准备中…</p>
         <p id="step"></p>
         <p id="step-desc"></p>
-        <div class="row">
+        <div class="row ops">
           <button type="button" id="btn-prev" disabled>上一步</button>
           <button type="button" id="btn-next" disabled>下一步</button>
           <button class="primary" type="button" id="btn-auto" disabled>自动</button>

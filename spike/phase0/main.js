@@ -92,7 +92,12 @@ let cursor = -1;
 let phase = "edit"; // edit | ready | play | done
 let screen = "home";
 let solveMode = "follow";
+let followFromPaint = false;
 let practiceMode = "free";
+/** 看步骤时手转和提示不一致，这一面转完就退出步骤。 */
+let practiceHandBreak = false;
+/** 看步骤时手转和当前这一步相同，转完后提示可以继续自己转。 */
+let practiceHandMatch = false;
 let demoQueue = null;
 let cubeDirty = false;
 let autoPlay = false;
@@ -482,6 +487,26 @@ function turnFromFollowDrag(pick, dx, dy) {
   return turnToken(pick.normal, pick.pos, drag);
 }
 
+/**
+ * 练一练看步骤时自己转。和当前这一步相同就按「下一步」记完成，不同就转完后退出步骤。
+ * 正在转动时不调用，避免两步叠在同一面上。
+ */
+function beginPracticeHandTurn(token) {
+  autoPlay = false;
+  const expected = pending[0] && pending[0].token;
+  moveDuration = 320;
+  if (expected && token === expected) {
+    practiceHandMatch = true;
+    playOne(performance.now());
+    return;
+  }
+  practiceHandBreak = true;
+  const hint = document.querySelector("#prac-hint");
+  if (hint) hint.textContent = describeMove(token);
+  startTwist(parseMove(token), performance.now());
+  setPracticeChrome();
+}
+
 const CELL_AT = {
   U: (r, c) => [c - 1, 1, r - 1],
   R: (r, c) => [1, 1 - r, 1 - c],
@@ -564,8 +589,15 @@ let viewGesture = null;
 /** 练一练里点在色块上是转这一面，点在空白处才转视角。跟做页始终转视角。 */
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
+  if (screen === "practice" && practiceMode === "guide" && autoPlay) {
+    autoPlay = false;
+    if (!twist) setPracticeChrome();
+  }
   const turning =
-    screen === "practice" && practiceMode === "free" && !twist && !demoQueue;
+    screen === "practice" &&
+    (practiceMode === "free" || practiceMode === "guide") &&
+    !twist &&
+    !demoQueue;
   const pick = turning ? pickFollowFace(event) : null;
   viewGesture = {
     x: event.clientX,
@@ -602,7 +634,9 @@ function endOrbitDrag(event) {
     const dx = event.clientX - gesture.x;
     const dy = event.clientY - gesture.y;
     const token = turnFromFollowDrag(gesture.pick, dx, dy);
-    if (token) {
+    if (token && screen === "practice" && practiceMode === "guide") {
+      beginPracticeHandTurn(token);
+    } else if (token) {
       moveDuration = 320;
       startTwist(parseMove(token), performance.now());
     }
@@ -659,7 +693,7 @@ function setControls() {
   );
   btnSolve.disabled = !solverReady || Boolean(twist);
   setPracticeChrome();
-  updateFollowTip();
+  updatePaintActions();
 }
 
 function showStep(token, desc) {
@@ -733,6 +767,7 @@ function showSuccess() {
 }
 
 function invalidateSolution() {
+  followFromPaint = false;
   tokens = [];
   pending = [];
   cursor = -1;
@@ -776,7 +811,19 @@ function finishMove() {
     }
     demoQueue = null;
     const pracHint = document.querySelector("#prac-hint");
-    if (pracHint) pracHint.textContent = "打乱好了。可以自己转回去，也可以点「还原」看步骤";
+    if (pracHint) pracHint.textContent = "打乱好了。按住色块滑动，自己转回去。也可以点「还原」看步骤";
+    return;
+  }
+  if (practiceHandBreak) {
+    practiceHandBreak = false;
+    const solved = visualSolved();
+    leavePracticeGuide();
+    const hint = document.querySelector("#prac-hint");
+    if (hint) {
+      hint.textContent = solved
+        ? "自己转回来了"
+        : "和提示的这一步不一样，接着自己转回去";
+    }
     return;
   }
   if (!pending.length) {
@@ -785,12 +832,19 @@ function finishMove() {
       if (visualSolved()) {
         if (pracHint) pracHint.textContent = "自己转回来了";
       } else if (pracHint) {
-        pracHint.textContent = "滑动色块转这一面，滑动空白处换个角度看";
+        pracHint.textContent = "按住色块，顺着那一层滑动。空白处换个角度看";
       }
       return;
     }
-    if (visualSolved()) showSuccess();
-    else {
+    if (visualSolved()) {
+      const hand = practiceHandMatch;
+      practiceHandMatch = false;
+      showSuccess();
+      if (hand && screen === "practice") {
+        const hint = document.querySelector("#prac-hint");
+        if (hint) hint.textContent = "自己转回来了";
+      }
+    } else {
       statusEl.textContent = "步骤播完了，但画面没有对齐，请点「从头再跟」";
       phase = "done";
       autoPlay = false;
@@ -805,6 +859,11 @@ function finishMove() {
   }
   phase = "ready";
   const next = pending[0];
+  if (practiceHandMatch && screen === "practice" && practiceMode === "guide") {
+    practiceHandMatch = false;
+    const hint = document.querySelector("#prac-hint");
+    if (hint) hint.textContent = "转对了。按住色块可以继续自己转";
+  }
   statusEl.textContent =
     "请在实体魔方上完成：" + describeMove(tokens[cursor]) + "。看清后点「下一步」。";
   showStep(next.token, "下一步：" + describeMove(next.token));
@@ -911,16 +970,18 @@ worker.onmessage = (event) => {
   poseScramble();
   cubeDirty = false;
   if (solveMode === "practice") {
+    followFromPaint = false;
     practiceMode = "guide";
     const pracHint = document.querySelector("#prac-hint");
-    if (pracHint) pracHint.textContent = "看清这一步再转。速度可以随时换";
+    if (pracHint) pracHint.textContent = "按住色块自己转这一步，或点「下一步」看它转";
     setPracticeChrome();
     updatePracticeStep();
     showScreen("practice", { keepCube: true });
   } else {
+    followFromPaint = true;
     showScreen("follow");
   }
-  updateFollowTip();
+  updatePaintActions();
 };
 
 function requestSolve() {
@@ -1499,6 +1560,9 @@ btnSolve.addEventListener("click", () => {
   solveMode = "follow";
   requestSolve();
 });
+document.querySelector("#btn-continue").addEventListener("click", () => {
+  showScreen("follow");
+});
 
 btnAuto.addEventListener("click", () => {
   if (!pending.length || twist) return;
@@ -1721,13 +1785,10 @@ paintCanvas.addEventListener("pointerup", (event) => {
   else paintFlip();
 });
 
-/** 切换四个主页面。练一练默认从还原好的魔方开始；跟着转没有步骤时留在首页。 */
+/** 切换页面。跟着转只从填色页进入，没有这次填色求出的步骤时不打开。 */
 function showScreen(name, opts = {}) {
   if (name === "follow") {
-    if (!tokens.length) {
-      updateFollowTip();
-      return;
-    }
+    if (!followFromPaint || !tokens.length) return;
     if (cubeDirty) {
       poseScramble();
       cubeDirty = false;
@@ -1742,6 +1803,7 @@ function showScreen(name, opts = {}) {
   if (name === "follow") document.querySelector("#follow-stage").appendChild(canvas);
   const host = document.querySelector("#screen-" + name + " .status-host");
   if (host) host.appendChild(statusEl);
+  if (name === "paint") updatePaintActions();
 }
 
 /** 打开练一练时把模型收回还原态。原来的跟做步骤先留着，回到跟着转时再摆回去。 */
@@ -1753,15 +1815,19 @@ function enterPractice() {
   cubeDirty = true;
   setPracticeChrome();
   const hint = document.querySelector("#prac-hint");
-  if (hint) hint.textContent = "这是还原好的魔方。滑动色块转这一面，滑动空白处换个角度看";
+  if (hint) hint.textContent = "这是还原好的魔方。按住色块，顺着那一层滑动。空白处换个角度看";
 }
 
-function updateFollowTip() {
-  const tip = document.querySelector("#follow-tip");
-  if (!tip) return;
-  tip.textContent = tokens.length
-    ? "已有 " + tokens.length + " 步，点这里一步步转"
-    : "先填色或拍照，求出步骤后再来";
+/** 颜色还是上次求出的那一盘时，用「继续跟着转」换掉「还原」。 */
+function updatePaintActions() {
+  const cont = document.querySelector("#btn-continue");
+  const show = followFromPaint && tokens.length > 0;
+  if (cont) cont.hidden = !show;
+  if (btnSolve) btnSolve.hidden = show;
+  if (show) {
+    const hint = document.querySelector("#paint-hint");
+    if (hint && screen === "paint") hint.textContent = "已有 " + tokens.length + " 步，可以继续跟着转";
+  }
 }
 
 function updatePracticeStep() {
@@ -1795,15 +1861,19 @@ function setPracticeChrome() {
 function leavePracticeGuide() {
   autoPlay = false;
   practiceMode = "free";
+  practiceHandBreak = false;
+  practiceHandMatch = false;
   pending = [];
   cursor = -1;
   phase = "edit";
   setPracticeChrome();
+  const step = document.querySelector("#prac-step");
+  if (step) step.textContent = "";
   const hint = document.querySelector("#prac-hint");
   if (hint) {
     hint.textContent = visualSolved()
       ? "已经还原。可以再随机打乱，或自己转着玩"
-      : "滑动色块转这一面，滑动空白处换个角度看";
+      : "按住色块，顺着那一层滑动。空白处换个角度看";
   }
 }
 

@@ -1,7 +1,7 @@
 <view class="home">
   <view class="hello">
     <view class="title">跟着还原魔方</view>
-    <text class="muted">填颜色、拍照，或先练一练，再一步步跟着转。</text>
+    <text class="muted">填颜色、拍照，或先练一练。</text>
   </view>
 
   <view class="menu" bindtap="onPaint">
@@ -25,14 +25,6 @@
     <view class="menu-body">
       <view class="menu-title">练一练</view>
       <text class="muted">从还原好的魔方开始，自己转，或看它怎么还原</text>
-    </view>
-  </view>
-
-  <view class="menu" bindtap="onFollow">
-    <view class="mark mark-go">转</view>
-    <view class="menu-body">
-      <view class="menu-title">跟着转</view>
-      <text class="muted">{{followTip}}</text>
     </view>
   </view>
 </view>

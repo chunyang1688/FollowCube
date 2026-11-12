@@ -6,6 +6,9 @@ export const FACES = {
   D: { axis: "y", layer: -1, quarter: Math.PI / 2 },
   F: { axis: "z", layer: 1, quarter: -Math.PI / 2 },
   B: { axis: "z", layer: -1, quarter: Math.PI / 2 },
+  M: { axis: "x", layer: 0, quarter: Math.PI / 2 },
+  E: { axis: "y", layer: 0, quarter: Math.PI / 2 },
+  S: { axis: "z", layer: 0, quarter: -Math.PI / 2 },
 };
 
 const FACE_CN = {
@@ -15,6 +18,18 @@ const FACE_CN = {
   L: "左面",
   F: "前面",
   B: "后面",
+};
+
+const SLICE_CN = {
+  M: "左右中间层",
+  E: "上下中间层",
+  S: "前后中间层",
+};
+
+const SLICE_WITH = {
+  M: "左面",
+  E: "下面",
+  S: "前面",
 };
 
 export function parseMove(token) {
@@ -36,8 +51,14 @@ export function animationAngle(move) {
   return move.quarter * move.quarters;
 }
 
-/** 例如 U' →「上面逆时针转 90°」 */
+/** 例如 U' →「上面逆时针转 90°」。中间层没有朝外的一面，改说它跟哪一面同向。 */
 export function describeMove(token) {
+  const slice = SLICE_CN[token[0]];
+  if (slice) {
+    if (token.endsWith("2")) return slice + "转 180°";
+    const withFace = SLICE_WITH[token[0]];
+    return token.endsWith("'") ? slice + "，与" + withFace + "反向" : slice + "，与" + withFace + "同向";
+  }
   const face = FACE_CN[token[0]];
   if (!face) return token;
   if (token.endsWith("2")) return face + "转 180°";

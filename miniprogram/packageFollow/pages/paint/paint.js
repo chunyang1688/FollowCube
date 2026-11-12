@@ -29,6 +29,7 @@ Page({
     hasError: false,
     seeing: '上面 · 前面 · 右面',
     solving: false,
+    canContinue: false,
     view3d: true,
     view3dTip: ''
   },
@@ -47,17 +48,21 @@ Page({
     this.refreshHint();
   },
 
-  /** 拍照页写回的六面，在这里填到立体魔方上 */
+  /**
+   * 从跟着转返回时，颜色没改过就露出「继续跟着转」。
+   * 拍照页写回的六面会清掉旧步骤，必须重新点还原。
+   */
   onShow() {
     const app = getApp();
     const captured = app && app.globalData ? app.globalData.capturedFacelets : null;
-    if (!captured || captured.length !== 54) return;
-    app.globalData.capturedFacelets = null;
-    this.facelets = captured.join ? captured.join('') : String(captured);
-    this.saveFacelets(true);
-    if (this.scene) this.scene.setFacelets(this.facelets);
+    if (captured && captured.length === 54) {
+      app.globalData.capturedFacelets = null;
+      this.facelets = captured.join ? captured.join('') : String(captured);
+      this.saveFacelets(true);
+      if (this.scene) this.scene.setFacelets(this.facelets);
+      wx.showToast({ title: '已填入拍照结果', icon: 'none' });
+    }
     this.refreshHint();
-    wx.showToast({ title: '已填入拍照结果', icon: 'none' });
   },
 
   onReady() {
@@ -93,7 +98,17 @@ Page({
       hint = '有格子对不上，转一转看标红的贴纸';
       hasError = true;
     }
-    this.setData({ hint, hasError });
+    const app = getApp();
+    const solution = app && app.globalData ? app.globalData.solution : null;
+    // 只有这份颜色就是上次求出的那一盘，才允许接着转，避免步骤和贴纸对不上
+    const canContinue = !hasError && !!(
+      solution &&
+      solution.state === this.facelets &&
+      solution.steps &&
+      solution.steps.length
+    );
+    if (canContinue) hint = '已有 ' + solution.moveCount + ' 步，可以继续跟着转';
+    this.setData({ hint, hasError, canContinue });
     if (this.scene) this.scene.markErrors(hasError && diag.cells ? diag.cells : []);
   },
 
@@ -246,6 +261,17 @@ Page({
     this.saveFacelets(true);
     if (this.scene) this.scene.setFacelets(this.facelets);
     this.refreshHint();
+  },
+
+  /** 颜色没改过时直接进入上次的步骤，不再求解一次。 */
+  onContinue() {
+    const app = getApp();
+    const solution = app && app.globalData ? app.globalData.solution : null;
+    if (!solution || solution.state !== this.facelets || !solution.steps || !solution.steps.length) {
+      this.refreshHint();
+      return;
+    }
+    wx.navigateTo({ url: '/packageFollow/pages/follow/follow' });
   },
 
   /**

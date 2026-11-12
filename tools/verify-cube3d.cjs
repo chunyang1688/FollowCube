@@ -89,23 +89,51 @@ async function main() {
   });
   check('所有 token 均为 90°/180° 转动', weird.length === 0, '异常 token: ' + weird.join(','));
 
-  // 6. 手动转面：手指往哪边拖，被点中的那一面就往哪边转
+  // 6. 手动转层：手指往哪边拖，色块所在的那一层就往哪边走
   check(
-    '前面右侧向上拖是 F\'',
-    turnToken([0, 0, 1], [1, 0, 1], [0, 1, 0]) === "F'"
+    '前面右侧向上拖，右层跟着向上，是 R',
+    turnToken([0, 0, 1], [1, 0, 1], [0, 1, 0]) === 'R'
   );
   check(
-    '前面右侧向下拖是 F',
-    turnToken([0, 0, 1], [1, 0, 1], [0, -1, 0]) === 'F'
+    '前面右侧向下拖，右层跟着向下，是 R\'',
+    turnToken([0, 0, 1], [1, 0, 1], [0, -1, 0]) === "R'"
   );
   check(
-    '前面上沿向右拖是 F',
-    turnToken([0, 0, 1], [0, 1, 1], [1, 0, 0]) === 'F'
+    '前面上沿向右拖，上层跟着向右，是 U\'',
+    turnToken([0, 0, 1], [0, 1, 1], [1, 0, 0]) === "U'"
   );
   check(
-    '上面靠右、向后拖是 U\'',
-    turnToken([0, 1, 0], [1, 1, 0], [0, 0, -1]) === "U'"
+    '前面中间一行向右拖，是上下中间层 E',
+    turnToken([0, 0, 1], [0, 0, 1], [1, 0, 0]) === 'E'
   );
+  check(
+    '前面正中向上拖，是左右中间层 M\'',
+    turnToken([0, 0, 1], [0, 0, 1], [0, 1, 0]) === "M'"
+  );
+  check(
+    '前面最下一行向右拖，里层（下面）跟着向右，是 D',
+    turnToken([0, 0, 1], [0, -1, 1], [1, 0, 0]) === 'D'
+  );
+  check(
+    '前面最左一列向上拖，里层（左面）跟着向上，是 L\'',
+    turnToken([0, 0, 1], [-1, 0, 1], [0, 1, 0]) === "L'"
+  );
+  check(
+    '上面靠后一行向右拖，里层（后面）跟着向右，是 B\'',
+    turnToken([0, 1, 0], [0, 1, -1], [1, 0, 0]) === "B'"
+  );
+
+  const slice = createModel();
+  const solvedSlice = slice.getFacelets();
+  slice.applyToken('M');
+  check('左右中间层转得动', slice.getFacelets() !== solvedSlice);
+  slice.applyToken("M'");
+  check('左右中间层可以转回去', slice.getFacelets() === solvedSlice);
+  slice.applyToken('E');
+  slice.applyToken("E'");
+  slice.applyToken('S');
+  slice.applyToken("S'");
+  check('三个中间层各转一次再转回，魔方还原', slice.getFacelets() === solvedSlice);
 
   console.log('\n' + (failed ? '✗ ' + failed + ' 项失败' : '✓ 全部通过') + '（解法 ' + tokens.length + ' 步：' + solution + '）');
   process.exit(failed ? 1 : 0);

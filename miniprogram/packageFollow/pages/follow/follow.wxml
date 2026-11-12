@@ -42,16 +42,16 @@
   </view>
 
   <view class="card">
-    <view class="row">
-      <button class="btn" bindtap="onPrev" disabled="{{index === 0 || animating || autoPlay}}">上一步</button>
-      <button class="btn btn-primary" bindtap="onNext" disabled="{{done || animating || autoPlay}}">
-        {{animating ? '转动中…' : '下一步'}}
+    <view class="ops">
+      <button class="btn op" bindtap="onPrev" disabled="{{index === 0 || animating || autoPlay}}">上一步</button>
+      <button class="btn btn-primary op" bindtap="onNext" disabled="{{done || animating || autoPlay}}">
+        {{animating ? '转动中' : '下一步'}}
       </button>
-      <button class="btn" bindtap="onRestart" disabled="{{animating}}">从头再跟</button>
+      <button class="btn op" bindtap="onRestart" disabled="{{animating}}">从头再跟</button>
+      <button class="btn op" bindtap="onAutoPlay" disabled="{{animating && !autoPlay}}">
+        {{autoPlay ? '暂停' : '自动'}}
+      </button>
     </view>
-    <button class="btn auto-btn" bindtap="onAutoPlay" disabled="{{animating && !autoPlay}}">
-      {{autoPlay ? '暂停自动演示' : '自动演示全部步骤'}}
-    </button>
   </view>
 
   <view class="card">

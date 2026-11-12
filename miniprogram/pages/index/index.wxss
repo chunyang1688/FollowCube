@@ -57,7 +57,3 @@
 .mark-practice {
   background: #f0a202;
 }
-
-.mark-go {
-  background: #3cb389;
-}

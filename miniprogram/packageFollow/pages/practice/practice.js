@@ -13,7 +13,7 @@ const SPEED = {
 };
 const MANUAL_MS = 320;
 const SCRAMBLE_MS = 150;
-const FREE_HINT = '滑动色块转这一面，滑动空白处换个角度看';
+const FREE_HINT = '按住色块，顺着那一层滑动。空白处换个角度看';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -175,7 +175,7 @@ Page({
     if (this._pageGone || seq !== this._seq) return;
     this.setData({
       busy: false,
-      hint: '打乱好了。可以自己转回去，也可以点「还原」看步骤'
+      hint: '打乱好了。按住色块滑动，自己转回去。也可以点「还原」看步骤'
     });
   },
 
@@ -209,7 +209,7 @@ Page({
         busy: false,
         autoPlay: false,
         speed: this.data.speed || 'mid',
-        hint: '看清这一步再转。速度可以随时换'
+        hint: '按住色块自己转这一步，或点「下一步」看它转'
       });
       this.refreshGuide();
     } catch (err) {
@@ -261,8 +261,11 @@ Page({
     this.setData({ speed });
   },
 
-  /** 播放一步。dir 为 1 向前，为 -1 时反向转回上一步。正在转时直接拒绝。 */
-  async playGuideStep(dir) {
+  /**
+   * 播放一步。dir 为 1 向前，为 -1 时反向转回上一步。正在转时直接拒绝。
+   * durationMs 留给手转：和按钮下一步同一套记步，但用手转时转得更快。
+   */
+  async playGuideStep(dir, durationMs) {
     if (this._locked || !this.scene) return false;
     const token = dir > 0
       ? this.tokens[this.cursor]
@@ -271,7 +274,7 @@ Page({
     const pace = SPEED[this.data.speed] || SPEED.mid;
     this._locked = true;
     this.setData({ busy: true });
-    this.scene.setMoveDuration(pace.move);
+    this.scene.setMoveDuration(durationMs || pace.move);
     try {
       await this.scene.playMove(token);
     } catch (err) {
@@ -334,13 +337,19 @@ Page({
     const touches = e.touches || [];
     const t = touches[0];
     if (!t || !this.scene) return;
+    // 自动播放时一按魔方就停，避免手指和动画抢同一面
+    if (this.data.mode === 'guide' && this._auto) {
+      this._auto = false;
+      this.setData({ autoPlay: false });
+    }
     if (touches.length >= 2) {
       this._pinch = this.distance(touches[0], touches[1]);
       this._gesture = null;
       return;
     }
     const rect = this._rect;
-    const canTurn = this.data.mode === 'free' && !this._locked && !this.data.busy;
+    const canTurn = (this.data.mode === 'free' || this.data.mode === 'guide')
+      && !this._locked && !this.data.busy;
     let pick = null;
     if (canTurn && rect) {
       pick = this.scene.pickFace(
@@ -389,11 +398,58 @@ Page({
     this.commitTurn(g.pick, dx, dy);
   },
 
+  /**
+   * 看步骤时自己转。和当前提示相同就记成完成这一步，不同就退出步骤继续自己转。
+   * 正在转时直接返回，避免两步叠在同一面上。
+   */
+  async commitGuideTurn(token) {
+    this._auto = false;
+    const expected = this.tokens[this.cursor];
+    if (expected && token === expected) {
+      const ok = await this.playGuideStep(1, MANUAL_MS);
+      if (!ok || this._pageGone) return;
+      const solved = this.scene.isSolved();
+      this.setData({
+        autoPlay: false,
+        hint: solved ? '自己转回来了' : '转对了。按住色块可以继续自己转'
+      });
+      return;
+    }
+    this._locked = true;
+    this.setData({ busy: true, autoPlay: false, hint: describeMove(token) });
+    this.scene.setMoveDuration(MANUAL_MS);
+    try {
+      await this.scene.playMove(token);
+    } catch (err) {
+      this._locked = false;
+      if (!this._pageGone) this.setData({ busy: false, hint: '按住色块自己转这一步，或点「下一步」看它转' });
+      return;
+    }
+    this._locked = false;
+    if (this._pageGone) return;
+    // 手转和提示对不上，步骤作废，魔方停在用户转到的样子
+    this.tokens = [];
+    this.cursor = 0;
+    const solved = this.scene.isSolved();
+    this.setData({
+      mode: 'free',
+      busy: false,
+      autoPlay: false,
+      hint: solved ? '自己转回来了' : '和提示的这一步不一样，接着自己转回去'
+    });
+    if (solved) wx.showToast({ title: '还原成功', icon: 'success' });
+  },
+
   /** 松手后按拖动方向转一面。转动被拒绝时不改提示，避免和上一段动画打架。 */
   async commitTurn(pick, dx, dy) {
-    if (!this.scene || this._locked || this.data.mode !== 'free') return;
+    if (!this.scene || this._locked) return;
+    if (this.data.mode !== 'free' && this.data.mode !== 'guide') return;
     const token = this.scene.turnFromDrag(pick, dx, dy);
     if (!token) return;
+    if (this.data.mode === 'guide') {
+      await this.commitGuideTurn(token);
+      return;
+    }
     this._locked = true;
     this.setData({ busy: true, hint: describeMove(token) });
     this.scene.setMoveDuration(MANUAL_MS);
